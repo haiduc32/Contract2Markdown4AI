@@ -1,0 +1,86 @@
+name: Publish self-contained single-file executables
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  publish:
+    name: Publish for ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            archive: zip
+          - os: ubuntu-latest
+            rid: linux-x64
+            archive: tar
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore NuGet packages
+        run: dotnet restore ./Contract2Markdown4AI.sln
+
+      - name: Publish single-file self-contained trimmed executable
+        # Use PowerShell Core on both runners; it's available on Ubuntu and Windows runners
+        shell: pwsh
+        run: |
+          $out = "./artifacts/${{ matrix.rid }}"
+          mkdir -Force $out | Out-Null
+          dotnet publish ./Contract2Markdown4AI/Contract2Markdown4AI.CLI.csproj \
+            --configuration Release \
+            --runtime ${{ matrix.rid }} \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:PublishTrimmed=true \
+            -p:StripSymbols=true \
+            -p:DebugType=None \
+            -o $out
+
+      - name: Compress artifacts
+        shell: pwsh
+        run: |
+          $rid = '${{ matrix.rid }}'
+          $archiveType = '${{ matrix.archive }}'
+          $out = "artifacts/$rid"
+          if ($archiveType -eq 'zip') {
+            $zipPath = "artifacts/$rid.zip"
+            if (Test-Path $zipPath) { Remove-Item $zipPath }
+            Compress-Archive -Path "$out/*" -DestinationPath $zipPath -Force
+            Write-Host "Created $zipPath"
+          } else {
+            # Create a tar.gz (tar is available on ubuntu; on windows runners tar is available too)
+            $tarPath = "artifacts/$rid.tar.gz"
+            if (Test-Path $tarPath) { Remove-Item $tarPath }
+            tar -czf $tarPath -C $out .
+            Write-Host "Created $tarPath"
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Contract2Markdown4AI-${{ matrix.rid }}
+          path: |
+            artifacts/${{ matrix.rid }}
+            artifacts/${{ matrix.rid }}.zip
+            artifacts/${{ matrix.rid }}.tar.gz
