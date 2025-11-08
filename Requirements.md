@@ -25,7 +25,9 @@ Example structure:
 
 ## Request body
 
-<model description>
+<description>
+
+<model reference to first model>
 
 ## Response
 
@@ -37,14 +39,22 @@ Example structure:
 
 ### 400
 
+## Models
+
+### <first model>
+
+```
+<model definition>
+```
+
 ...
 
 ```
 
 ### Model documentation
 
-- when describing the models, make sure to expoand the objects including all inside references and arrays, etc, at any depth
-- avoid recursive references but providing the model reference if recursion detected
+- add model descriptions to the operation files. List all models that are referenced from one another recursively.
+- list each used model only once. avoid getting into an infinite recursive loop.
 - the models should be described using JSON Schema
 
 ## Libraries

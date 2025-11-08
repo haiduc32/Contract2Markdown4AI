@@ -4,7 +4,7 @@
 // Usage: dotnet run -- <openapi-file> [-o|--output <folder>]
 // Loads an OpenAPI (json/yaml) file with NSwag and writes one markdown file per operation.
 
-namespace Contract2Markdown4AI;
+namespace Contract2Markdown4AI.CLI;
 
 class Program
 {

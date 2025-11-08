@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Contract2Markdown4AI", "Contract2Markdown4AI\Contract2Markdown4AI.csproj", "{09EA3C09-E4BF-4B40-B9A8-B02C448E4873}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Contract2Markdown4AI.CLI", "Contract2Markdown4AI.CLI\Contract2Markdown4AI.CLI.csproj", "{924A532F-95DF-4C46-A495-17058B5681CC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,18 @@ Global
 		{09EA3C09-E4BF-4B40-B9A8-B02C448E4873}.Release|x64.Build.0 = Release|Any CPU
 		{09EA3C09-E4BF-4B40-B9A8-B02C448E4873}.Release|x86.ActiveCfg = Release|Any CPU
 		{09EA3C09-E4BF-4B40-B9A8-B02C448E4873}.Release|x86.Build.0 = Release|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Debug|x64.Build.0 = Debug|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Debug|x86.Build.0 = Debug|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Release|x64.ActiveCfg = Release|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Release|x64.Build.0 = Release|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Release|x86.ActiveCfg = Release|Any CPU
+		{924A532F-95DF-4C46-A495-17058B5681CC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
