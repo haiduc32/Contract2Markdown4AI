@@ -80,7 +80,7 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to load document: {ex.Message}");
+            Console.WriteLine($"Failed to load document: {ex}");
             return 3;
         }
 
