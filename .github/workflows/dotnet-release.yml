@@ -1,4 +1,4 @@
-name: Publish self-contained single-file executables — ${{ github.event.inputs.version }}
+name: Release self-contained single-file executables
 
 # Needs write permission to create releases and upload assets
 permissions:
@@ -50,7 +50,6 @@ jobs:
         shell: pwsh
         run: |
           $version = '${{ github.event.inputs.version }}'
-          # normalize version locally (no v prefix change here; used for filenames only)
           $out = "./artifacts/${{ matrix.rid }}-$version"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           dotnet publish ./Contract2Markdown4AI.CLI/Contract2Markdown4AI.CLI.csproj `
@@ -82,12 +81,10 @@ jobs:
             Write-Host "Created $tarPath"
           }
 
-      # Upload only the archive files (not the whole artifacts directory)
       - name: Upload ZIP archive artifact
         if: ${{ matrix.archive == 'zip' }}
         uses: actions/upload-artifact@v4
         with:
-          # give the artifact a stable name so download-artifact will create a predictable folder
           name: Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}.zip
           path: artifacts/Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}.zip
 
@@ -109,7 +106,6 @@ jobs:
       - name: Download published artifacts
         uses: actions/download-artifact@v4
         with:
-          # download all artifacts created by the publish job(s)
           path: artifacts
 
       - name: Show downloaded artifact layout (debug)
@@ -123,11 +119,9 @@ jobs:
         id: collect_assets
         run: |
           mkdir -p release_assets
-          # find both zip and tar.gz under artifacts and copy into release_assets
           find artifacts -type f \( -iname '*.zip' -o -iname '*.tar.gz' \) -print -exec cp {} release_assets/ \;
           echo "Files copied into release_assets:"
           ls -la release_assets || true
-          # fail early if nothing found
           count=$(ls -1 release_assets | wc -l || true)
           echo "asset_count=$count" >> $GITHUB_OUTPUT
           if [ "$count" -eq "0" ]; then
@@ -157,10 +151,5 @@ jobs:
           tag: ${{ steps.set_tag.outputs.tag }}
           name: Contract2Markdown4AI ${{ steps.set_tag.outputs.tag }}
           body: Automated release created by workflow run ${{ github.run_id }} for commit ${{ github.sha }}.
-          # point to the collected assets directory to make sure only the built archives are attached
           files: |
             release_assets/*
-
-      - name: Confirm uploaded assets (debug)
-        run: |
-          echo "Release created for tag ${{ steps.set_tag.outputs.tag }}. Check the Release page to verify uploaded artifacts."
