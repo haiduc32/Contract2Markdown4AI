@@ -1,4 +1,4 @@
-name: Release self-contained single-file executables
+name: Publish self-contained single-file executables — ${{ github.event.inputs.version }}
 
 # Needs write permission to create releases and upload assets
 permissions:
@@ -13,7 +13,7 @@ on:
 
 jobs:
   publish:
-    name: Publish for ${{ matrix.rid }}
+    name: Publish for ${{ matrix.rid }} — ${{ github.event.inputs.version }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -47,10 +47,10 @@ jobs:
         run: dotnet restore ./Contract2Markdown4AI.sln
 
       - name: Publish single-file self-contained trimmed executable
-        # Use PowerShell Core on both runners; it's available on Ubuntu and Windows runners
         shell: pwsh
         run: |
           $version = '${{ github.event.inputs.version }}'
+          # normalize version locally (no v prefix change here; used for filenames only)
           $out = "./artifacts/${{ matrix.rid }}-$version"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           dotnet publish ./Contract2Markdown4AI.CLI/Contract2Markdown4AI.CLI.csproj `
@@ -71,34 +71,35 @@ jobs:
           $archiveType = '${{ matrix.archive }}'
           $out = "artifacts/$rid-$version"
           if ($archiveType -eq 'zip') {
-            $zipPath = "artifacts/$rid-$version.zip"
+            $zipPath = "artifacts/Contract2Markdown4AI-$rid-$version.zip"
             if (Test-Path $zipPath) { Remove-Item $zipPath }
             Compress-Archive -Path "$out/*" -DestinationPath $zipPath -Force
             Write-Host "Created $zipPath"
           } else {
-            # Create a tar.gz (tar is available on ubuntu; on windows runners tar is available too)
-            $tarPath = "artifacts/$rid-$version.tar.gz"
+            $tarPath = "artifacts/Contract2Markdown4AI-$rid-$version.tar.gz"
             if (Test-Path $tarPath) { Remove-Item $tarPath }
             tar -czf $tarPath -C $out .
             Write-Host "Created $tarPath"
           }
 
+      # Upload only the archive files (not the whole artifacts directory)
       - name: Upload ZIP archive artifact
         if: ${{ matrix.archive == 'zip' }}
         uses: actions/upload-artifact@v4
         with:
+          # give the artifact a stable name so download-artifact will create a predictable folder
           name: Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}.zip
-          path: artifacts/${{ matrix.rid }}-${{ github.event.inputs.version }}.zip
+          path: artifacts/Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}.zip
 
       - name: Upload TAR.GZ archive artifact
         if: ${{ matrix.archive == 'tar' }}
         uses: actions/upload-artifact@v4
         with:
           name: Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}.tar.gz
-          path: artifacts/${{ matrix.rid }}-${{ github.event.inputs.version }}.tar.gz
+          path: artifacts/Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}.tar.gz
 
   release:
-    name: Create GitHub Release and upload artifacts
+    name: Create GitHub Release and upload artifacts — ${{ github.event.inputs.version }}
     needs: publish
     runs-on: ubuntu-latest
     steps:
@@ -111,12 +112,28 @@ jobs:
           # download all artifacts created by the publish job(s)
           path: artifacts
 
-      - name: List downloaded artifacts (debug)
+      - name: Show downloaded artifact layout (debug)
         run: |
-          echo "Contents of artifacts directory:"
+          echo "Top-level artifacts directory:"
           ls -la artifacts || true
           echo "Recursive listing:"
           ls -laR artifacts || true
+
+      - name: Collect actual archive files into release_assets directory
+        id: collect_assets
+        run: |
+          mkdir -p release_assets
+          # find both zip and tar.gz under artifacts and copy into release_assets
+          find artifacts -type f \( -iname '*.zip' -o -iname '*.tar.gz' \) -print -exec cp {} release_assets/ \;
+          echo "Files copied into release_assets:"
+          ls -la release_assets || true
+          # fail early if nothing found
+          count=$(ls -1 release_assets | wc -l || true)
+          echo "asset_count=$count" >> $GITHUB_OUTPUT
+          if [ "$count" -eq "0" ]; then
+            echo "No archives found in artifacts; aborting release step." >&2
+            exit 1
+          fi
 
       - name: Normalize version into tag
         id: set_tag
@@ -132,16 +149,18 @@ jobs:
           else
             tag="$version"
           fi
-          echo "Normalized version '$version' to tag '$tag'"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release and upload all archives
-        # ncipollo/release-action accepts globs for files to upload; use recursive globs
+      - name: Create GitHub Release and upload archives
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.set_tag.outputs.tag }}
           name: Contract2Markdown4AI ${{ steps.set_tag.outputs.tag }}
           body: Automated release created by workflow run ${{ github.run_id }} for commit ${{ github.sha }}.
+          # point to the collected assets directory to make sure only the built archives are attached
           files: |
-            artifacts/**/*.zip
-            artifacts/**/*.tar.gz
+            release_assets/*
+
+      - name: Confirm uploaded assets (debug)
+        run: |
+          echo "Release created for tag ${{ steps.set_tag.outputs.tag }}. Check the Release page to verify uploaded artifacts."
