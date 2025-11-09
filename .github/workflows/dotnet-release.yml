@@ -1,0 +1,135 @@
+name: Publish self-contained single-file executables
+
+# Needs write permission to create releases and upload assets
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to include in artifact names (e.g., v1.2.3 or 1.2.3)'
+        required: true
+
+jobs:
+  publish:
+    name: Publish for ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            archive: zip
+          - os: ubuntu-latest
+            rid: linux-x64
+            archive: tar
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore NuGet packages
+        run: dotnet restore ./Contract2Markdown4AI.sln
+
+      - name: Publish single-file self-contained trimmed executable
+        # Use PowerShell Core on both runners; it's available on Ubuntu and Windows runners
+        shell: pwsh
+        run: |
+          $version = '${{ github.event.inputs.version }}'
+          $out = "./artifacts/${{ matrix.rid }}-$version"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          dotnet publish ./Contract2Markdown4AI.CLI/Contract2Markdown4AI.CLI.csproj `
+            --configuration Release `
+            --runtime ${{ matrix.rid }} `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:PublishTrimmed=true `
+            -p:StripSymbols=true `
+            -p:DebugType=None `
+            -o $out
+
+      - name: Compress artifacts
+        shell: pwsh
+        run: |
+          $rid = '${{ matrix.rid }}'
+          $version = '${{ github.event.inputs.version }}'
+          $archiveType = '${{ matrix.archive }}'
+          $out = "artifacts/$rid-$version"
+          if ($archiveType -eq 'zip') {
+            $zipPath = "artifacts/$rid-$version.zip"
+            if (Test-Path $zipPath) { Remove-Item $zipPath }
+            Compress-Archive -Path "$out/*" -DestinationPath $zipPath -Force
+            Write-Host "Created $zipPath"
+          } else {
+            # Create a tar.gz (tar is available on ubuntu; on windows runners tar is available too)
+            $tarPath = "artifacts/$rid-$version.tar.gz"
+            if (Test-Path $tarPath) { Remove-Item $tarPath }
+            tar -czf $tarPath -C $out .
+            Write-Host "Created $tarPath"
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}
+          path: |
+            artifacts/${{ matrix.rid }}-${{ github.event.inputs.version }}
+            artifacts/${{ matrix.rid }}-${{ github.event.inputs.version }}.zip
+            artifacts/${{ matrix.rid }}-${{ github.event.inputs.version }}.tar.gz
+
+  release:
+    name: Create GitHub Release and upload artifacts
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download published artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # download all artifacts created by the publish job(s)
+          path: artifacts
+
+      - name: Normalize version into tag
+        id: set_tag
+        shell: bash
+        run: |
+          version='${{ github.event.inputs.version }}'
+          if [[ -z "$version" ]]; then
+            echo "version input is required"
+            exit 1
+          fi
+          if [[ "$version" != v* ]]; then
+            tag="v$version"
+          else
+            tag="$version"
+          fi
+          echo "Normalized version '$version' to tag '$tag'"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release and upload all archives
+        # ncipollo/release-action accepts globs for files to upload
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.set_tag.outputs.tag }}
+          name: Contract2Markdown4AI ${{ steps.set_tag.outputs.tag }}
+          body: Automated release created by workflow run ${{ github.run_id }} for commit ${{ github.sha }}.
+          files: |
+            artifacts/*.zip
+            artifacts/*.tar.gz
