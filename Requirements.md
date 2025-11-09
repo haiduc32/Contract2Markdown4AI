@@ -57,6 +57,19 @@ Example structure:
 - list each used model only once. avoid getting into an infinite recursive loop.
 - the models should be described using JSON Schema
 
+### Response Schema Handling
+
+- Support both Swagger 2.0 and OpenAPI 3.0 response formats:
+  - **Swagger 2.0**: Response schemas are directly under the response object (`response.schema`)
+  - **OpenAPI 3.0**: Response schemas are under content type (`response.content[mediaType].schema`)
+- Handle both inline schema definitions and `$ref` references:
+  - **Inline schemas**: Expand and display the schema structure directly in the response section
+  - **Referenced models**: Show a reference link to the model section and include the full model definition at the end of the operation file
+- Support both reference formats:
+  - **Swagger 2.0**: `#/definitions/ModelName`
+  - **OpenAPI 3.0**: `#/components/schemas/ModelName`
+- Collect and include transitive model dependencies (models referenced by other models)
+
 ## Libraries
 
 - use NSwag

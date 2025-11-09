@@ -1,6 +1,8 @@
 /ExampleContracts
 /output_check
 /publish
+/*_out
+/examples
 
 # Build results
 [Dd]ebug/

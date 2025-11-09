@@ -188,7 +188,8 @@ public static class OpenApiToMarkdown
                                 if (schema.ValueKind == JsonValueKind.Object && schema.TryGetProperty("$ref", out var srefTop) && srefTop.ValueKind == JsonValueKind.String)
                                 {
                                     var refTop = srefTop.GetString() ?? string.Empty;
-                                    if (refTop.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase))
+                                    if (refTop.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase) ||
+                                        refTop.StartsWith("#/definitions/", StringComparison.OrdinalIgnoreCase))
                                     {
                                         var parts = refTop.Split('/');
                                         var modelName = parts.Length > 0 ? parts[^1] : refTop;
@@ -236,6 +237,7 @@ public static class OpenApiToMarkdown
                         if (r.TryGetProperty("description", out var rd) && rd.ValueKind == JsonValueKind.String)
                             sb.AppendLine(rd.GetString());
 
+                        // Check for OpenAPI 3.0 style (content property)
                         if (r.TryGetProperty("content", out var rcontent) && rcontent.ValueKind == JsonValueKind.Object)
                         {
                             if (rcontent.EnumerateObject().Count() > 0)
@@ -245,40 +247,15 @@ public static class OpenApiToMarkdown
                                 sb.AppendLine($"- Content: {media.Name}");
                                 if (media.Value.ValueKind == JsonValueKind.Object && media.Value.TryGetProperty("schema", out var schema))
                                 {
-                                    // collect any component refs referenced by this response schema
-                                    CollectComponentRefs(schema, modelsToInclude);
-                                    if (schema.ValueKind == JsonValueKind.Object && schema.TryGetProperty("$ref", out var sref) && sref.ValueKind == JsonValueKind.String)
-                                    {
-                                        var refStr = sref.GetString() ?? string.Empty;
-                                        if (refStr.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase))
-                                        {
-                                            var parts = refStr.Split('/');
-                                            var modelName = parts.Length > 0 ? parts[^1] : refStr;
-                                            // record model for inclusion at the end of this operation file
-                                            modelsToInclude.Add(refStr);
-                                            sb.AppendLine();
-                                            sb.AppendLine($"- Schema: {modelName} (see model section below)");
-                                            continue;
-                                        }
-                                    }
-
-                                    var schemaSummary = Helpers.SummarizeSchema(schema, root, expansionCache, false);
-                                    if (!string.IsNullOrWhiteSpace(schemaSummary))
-                                    {
-                                        sb.AppendLine();
-                                        sb.AppendLine("```");
-                                        sb.AppendLine(schemaSummary.TrimEnd());
-                                        sb.AppendLine("```");
-                                    }
-                                    else
-                                    {
-                                        sb.AppendLine();
-                                        sb.AppendLine("```json");
-                                        sb.AppendLine(JsonSerializer.Serialize(schema, new JsonSerializerOptions { WriteIndented = true }));
-                                        sb.AppendLine("```");
-                                    }
+                                    ProcessResponseSchema(schema, root, modelsToInclude, expansionCache, sb);
                                 }
                             }
+                        }
+                        // Check for Swagger 2.0 style (schema directly under response)
+                        else if (r.TryGetProperty("schema", out var schema2))
+                        {
+                            sb.AppendLine();
+                            ProcessResponseSchema(schema2, root, modelsToInclude, expansionCache, sb);
                         }
                         sb.AppendLine();
                     }
@@ -340,10 +317,31 @@ public static class OpenApiToMarkdown
         }
 
         // Generate components.md with one section per component schema
+        // Handle both OpenAPI 3.0 (components/schemas) and Swagger 2.0 (definitions)
         try
         {
+            var schemasToDocument = new List<(string name, JsonElement schema)>();
+            
+            // Check for OpenAPI 3.0 components/schemas
             if (root.TryGetProperty("components", out var components) && components.ValueKind == JsonValueKind.Object &&
                 components.TryGetProperty("schemas", out var schemas) && schemas.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var schema in schemas.EnumerateObject())
+                {
+                    schemasToDocument.Add((schema.Name, schema.Value));
+                }
+            }
+            
+            // Check for Swagger 2.0 definitions
+            if (root.TryGetProperty("definitions", out var definitions) && definitions.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var def in definitions.EnumerateObject())
+                {
+                    schemasToDocument.Add((def.Name, def.Value));
+                }
+            }
+
+            if (schemasToDocument.Count > 0)
             {
                 var comp = new StringBuilder();
                 if (metadata != null && metadata.Count > 0)
@@ -359,14 +357,14 @@ public static class OpenApiToMarkdown
                 }
                 comp.AppendLine("# Components");
                 comp.AppendLine();
-                foreach (var schema in schemas.EnumerateObject())
+                
+                foreach (var (name, schemaValue) in schemasToDocument)
                 {
-                    var name = schema.Name;
                     comp.AppendLine($"## {name}");
                     comp.AppendLine();
                     try
                     {
-                        var expanded = Helpers.SummarizeSchema(schema.Value, root, expansionCache);
+                        var expanded = Helpers.SummarizeSchema(schemaValue, root, expansionCache);
                         if (!string.IsNullOrWhiteSpace(expanded))
                         {
                             comp.AppendLine("```");
@@ -376,7 +374,7 @@ public static class OpenApiToMarkdown
                         else
                         {
                             comp.AppendLine("```json");
-                            comp.AppendLine(JsonSerializer.Serialize(schema.Value, new JsonSerializerOptions { WriteIndented = true }));
+                            comp.AppendLine(JsonSerializer.Serialize(schemaValue, new JsonSerializerOptions { WriteIndented = true }));
                             comp.AppendLine("```");
                         }
                     }
@@ -443,6 +441,44 @@ public static class OpenApiToMarkdown
 
     // Helpers
 
+    static void ProcessResponseSchema(JsonElement schema, JsonElement root, HashSet<string> modelsToInclude, Dictionary<string, string> expansionCache, StringBuilder sb)
+    {
+        // collect any component refs referenced by this response schema
+        CollectComponentRefs(schema, modelsToInclude);
+        
+        // Check if the schema is a direct reference to a component
+        if (schema.ValueKind == JsonValueKind.Object && schema.TryGetProperty("$ref", out var sref) && sref.ValueKind == JsonValueKind.String)
+        {
+            var refStr = sref.GetString() ?? string.Empty;
+            // Handle both OpenAPI 3.0 (#/components/schemas/) and Swagger 2.0 (#/definitions/) references
+            if (refStr.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase) || 
+                refStr.StartsWith("#/definitions/", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = refStr.Split('/');
+                var modelName = parts.Length > 0 ? parts[^1] : refStr;
+                // record model for inclusion at the end of this operation file
+                modelsToInclude.Add(refStr);
+                sb.AppendLine($"- Schema: {modelName} (see model section below)");
+                return;
+            }
+        }
+
+        // Otherwise, inline the schema
+        var schemaSummary = Helpers.SummarizeSchema(schema, root, expansionCache, false);
+        if (!string.IsNullOrWhiteSpace(schemaSummary))
+        {
+            sb.AppendLine("```");
+            sb.AppendLine(schemaSummary.TrimEnd());
+            sb.AppendLine("```");
+        }
+        else
+        {
+            sb.AppendLine("```json");
+            sb.AppendLine(JsonSerializer.Serialize(schema, new JsonSerializerOptions { WriteIndented = true }));
+            sb.AppendLine("```");
+        }
+    }
+
     static void CollectComponentRefs(JsonElement node, HashSet<string> set)
     {
         if (node.ValueKind == JsonValueKind.Object)
@@ -450,7 +486,9 @@ public static class OpenApiToMarkdown
             if (node.TryGetProperty("$ref", out var r) && r.ValueKind == JsonValueKind.String)
             {
                 var rr = r.GetString();
-                if (!string.IsNullOrEmpty(rr) && rr.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrEmpty(rr) && 
+                    (rr.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase) ||
+                     rr.StartsWith("#/definitions/", StringComparison.OrdinalIgnoreCase)))
                 {
                     set.Add(rr);
                     return;
@@ -482,8 +520,10 @@ public static class OpenApiToMarkdown
             try
             {
                 if (string.IsNullOrWhiteSpace(r)) continue;
-                // only handle component schema refs
-                if (!r.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase)) continue;
+                // Handle both OpenAPI 3.0 (#/components/schemas/) and Swagger 2.0 (#/definitions/) references
+                if (!r.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase) && 
+                    !r.StartsWith("#/definitions/", StringComparison.OrdinalIgnoreCase)) 
+                    continue;
                 JsonElement resolved;
                 try { resolved = Helpers.ResolveReference(root, r); }
                 catch { continue; }

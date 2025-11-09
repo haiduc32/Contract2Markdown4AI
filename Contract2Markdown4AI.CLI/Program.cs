@@ -64,7 +64,19 @@ class Program
         OpenApiDocument document;
         try
         {
-            document = await OpenApiDocument.FromFileAsync(inputPath).ConfigureAwait(false);
+            string content = await File.ReadAllTextAsync(inputPath).ConfigureAwait(false);
+            string extension = Path.GetExtension(inputPath).ToLowerInvariant();
+            
+            if (extension == ".yaml" || extension == ".yml")
+            {
+                // Parse YAML content
+                document = await OpenApiYamlDocument.FromYamlAsync(content).ConfigureAwait(false);
+            }
+            else
+            {
+                // Parse JSON content directly
+                document = await OpenApiDocument.FromJsonAsync(content).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {

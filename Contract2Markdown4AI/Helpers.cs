@@ -138,7 +138,10 @@ public class Helpers
 
             // If this is a components schema reference and caller requested not to expand component refs inline,
             // just print the $ref and don't resolve it here.
-            if (!expandComponentRefs && r.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase))
+            // Handle both OpenAPI 3.0 (#/components/schemas/) and Swagger 2.0 (#/definitions/)
+            if (!expandComponentRefs && 
+                (r.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase) ||
+                 r.StartsWith("#/definitions/", StringComparison.OrdinalIgnoreCase)))
             {
                 sb.AppendLine(ind + $"$ref: {r}");
                 return sb.ToString();
