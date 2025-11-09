@@ -1,6 +1,6 @@
 name: Release self-contained single-file executables
+run-name: "Release ${{ inputs.version }} — Contract2Markdown4AI"
 
-# Needs write permission to create releases and upload assets
 permissions:
   contents: write
 
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to include in artifact names (e.g., v1.2.3 or 1.2.3)'
+        description: 'Version to include in artifact names (e.g., 1.2.3 or v1.2.3)'
         required: true
 
 jobs:
@@ -81,6 +81,7 @@ jobs:
             Write-Host "Created $tarPath"
           }
 
+      # Upload only the archive files
       - name: Upload ZIP archive artifact
         if: ${{ matrix.archive == 'zip' }}
         uses: actions/upload-artifact@v4
@@ -116,21 +117,13 @@ jobs:
           ls -laR artifacts || true
 
       - name: Collect actual archive files into release_assets directory
-        id: collect_assets
         run: |
           set -euo pipefail
           mkdir -p release_assets
-          # download-artifact places each artifact inside a folder named after the artifact.
-          # Find the actual archives inside those folders and copy them into release_assets.
           find artifacts -type f \( -iname '*.zip' -o -iname '*.tar.gz' \) -print -exec cp {} release_assets/ \;
           echo "Files copied into release_assets:"
           ls -la release_assets || true
-          count=$(ls -1 release_assets | wc -l || true)
-          echo "asset_count=$count" >> "$GITHUB_OUTPUT"
-          if [ "$count" -eq "0" ]; then
-            echo "No archives found in artifacts; aborting release step." >&2
-            exit 1
-          fi
+          test -n "$(ls -A release_assets)" || { echo "No archives found in artifacts; aborting release step." >&2; exit 1; }
 
       - name: Normalize version into tag
         id: set_tag
@@ -151,38 +144,34 @@ jobs:
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.set_tag.outputs.tag }}
           release_name: Contract2Markdown4AI ${{ steps.set_tag.outputs.tag }}
           body: Automated release created by workflow run ${{ github.run_id }} for commit ${{ github.sha }}.
           draft: false
           prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload archives to the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Strip the '{...}' template from upload_url if present
           UPLOAD_URL: ${{ steps.create_release.outputs.upload_url }}
         run: |
           set -euo pipefail
-          if [ -z "${UPLOAD_URL:-}" ]; then
-            echo "Release upload_url is empty; create-release may have failed." >&2
-            exit 1
-          fi
-          echo "Uploading files from release_assets/"
+          base_url="${UPLOAD_URL%%\{*}"
+          echo "Uploading files from release_assets/ to ${base_url}"
           for f in release_assets/*; do
             [ -f "$f" ] || continue
             name="$(basename "$f")"
             echo "Uploading $name ..."
-            # Use the GitHub uploads API; append ?name=<assetname>
-            url="${UPLOAD_URL}?name=${name}"
-            # POST binary; Content-Type application/octet-stream
             http_status=$(curl -sS -o /dev/null -w "%{http_code}" \
               -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "Content-Type: application/octet-stream" \
               --data-binary @"$f" \
-              "$url")
+              "${base_url}?name=${name}")
             if [ "$http_status" -ge 200 ] && [ "$http_status" -lt 300 ]; then
               echo "Uploaded $name (HTTP $http_status)"
             else
