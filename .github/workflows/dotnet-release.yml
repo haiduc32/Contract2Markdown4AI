@@ -1,4 +1,4 @@
-name: Publish self-contained single-file executables
+name: Release self-contained single-file executables
 
 # Needs write permission to create releases and upload assets
 permissions:
