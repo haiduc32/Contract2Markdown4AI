@@ -97,7 +97,7 @@ jobs:
           # Publish without specifying a runtime so the output is framework-dependent
           dotnet publish ./Contract2Markdown4AI.CLI/Contract2Markdown4AI.CLI.csproj \
             --configuration Release \
-            -p:PublishSingleFile=false \
+            -p:PublishSingleFile=true \
             -p:SelfContained=false \
             -p:PublishTrimmed=false \
             -p:StripSymbols=true \
