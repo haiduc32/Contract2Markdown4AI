@@ -105,7 +105,7 @@ jobs:
             -o "$out"
           # Keep only the main DLL to create a single-file artifact that runs via `dotnet <dll>` on any platform with .NET installed
           mkdir -p "artifacts/portable-singlefile-$version"
-          main_dll=$(ls "$out"/*.dll | head -n 1)
+          main_dll=$(ls "$out"/*.exe | head -n 1)
           if [ -z "$main_dll" ]; then
             echo "No DLL produced by publish; aborting." >&2
             exit 1
