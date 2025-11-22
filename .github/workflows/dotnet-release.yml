@@ -98,7 +98,7 @@ jobs:
 
   release:
     name: Create GitHub Release and upload artifacts — ${{ github.event.inputs.version }}
-    needs: publish
+    needs: [publish, publish-portable]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -183,3 +183,58 @@ jobs:
       - name: Confirm uploaded assets (debug)
         run: |
           echo "Release created for tag ${{ steps.set_tag.outputs.tag }}. Check the Release page to verify uploaded artifacts."
+
+  publish-portable:
+    name: Publish portable framework-dependent DLL — ${{ github.event.inputs.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore NuGet packages
+        run: dotnet restore ./Contract2Markdown4AI.sln
+
+      - name: Publish framework-dependent (portable) application
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ github.event.inputs.version }}'
+          out="artifacts/portable-$version"
+          rm -rf "$out" || true
+          mkdir -p "$out"
+          # Publish without specifying a runtime so the output is framework-dependent
+          dotnet publish ./Contract2Markdown4AI.CLI/Contract2Markdown4AI.CLI.csproj \
+            --configuration Release \
+            --output "$out"
+          # Keep only the main DLL to create a single-file artifact that runs via `dotnet <dll>` on any platform with .NET installed
+          mkdir -p "artifacts/portable-singlefile-$version"
+          main_dll=$(ls "$out"/*.dll | head -n 1)
+          if [ -z "$main_dll" ]; then
+            echo "No DLL produced by publish; aborting." >&2
+            exit 1
+          fi
+          cp "$main_dll" "artifacts/portable-singlefile-$version/"
+
+      - name: Compress portable single-file artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ github.event.inputs.version }}'
+          in_dir="artifacts/portable-singlefile-$version"
+          zip_path="artifacts/C2M4AI-portable-$version.zip"
+          if [ -f "$zip_path" ]; then rm -f "$zip_path"; fi
+          (cd "$in_dir" && zip -r "../$(basename "$zip_path")" .) || (echo "zip failed; ensure zip is available on runner" >&2; exit 1)
+          echo "Created $zip_path"
+
+      - name: Upload portable single-file artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: C2M4AI-portable-${{ github.event.inputs.version }}.zip
+          path: artifacts/Contract2Markdown4AI-portable-${{ github.event.inputs.version }}.zip
