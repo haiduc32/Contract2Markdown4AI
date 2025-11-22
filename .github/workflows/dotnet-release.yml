@@ -97,7 +97,12 @@ jobs:
           # Publish without specifying a runtime so the output is framework-dependent
           dotnet publish ./Contract2Markdown4AI.CLI/Contract2Markdown4AI.CLI.csproj \
             --configuration Release \
-            --output "$out"
+            -p:PublishSingleFile=false \
+            -p:SelfContained=false \
+            -p:PublishTrimmed=false \
+            -p:StripSymbols=true \
+            -p:DebugType=None \
+            -o "$out"
           # Keep only the main DLL to create a single-file artifact that runs via `dotnet <dll>` on any platform with .NET installed
           mkdir -p "artifacts/portable-singlefile-$version"
           main_dll=$(ls "$out"/*.dll | head -n 1)
