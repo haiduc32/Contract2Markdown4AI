@@ -62,39 +62,12 @@ jobs:
             -p:DebugType=None `
             -o $out
 
-      - name: Compress artifacts
-        shell: pwsh
-        run: |
-          $rid = '${{ matrix.rid }}'
-          $version = '${{ github.event.inputs.version }}'
-          $archiveType = '${{ matrix.archive }}'
-          $out = "artifacts/$rid-$version"
-          if ($archiveType -eq 'zip') {
-            $zipPath = "artifacts/Contract2Markdown4AI-$rid-$version.zip"
-            if (Test-Path $zipPath) { Remove-Item $zipPath }
-            Compress-Archive -Path "$out/*" -DestinationPath $zipPath -Force
-            Write-Host "Created $zipPath"
-          } else {
-            $tarPath = "artifacts/Contract2Markdown4AI-$rid-$version.tar.gz"
-            if (Test-Path $tarPath) { Remove-Item $tarPath }
-            tar -czf $tarPath -C $out .
-            Write-Host "Created $tarPath"
-          }
-
-      # Upload only the archive files
-      - name: Upload ZIP archive artifact
-        if: ${{ matrix.archive == 'zip' }}
+      # Upload the published output directory directly as an artifact (avoid pre-zipping)
+      - name: Upload published output as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}.zip
-          path: artifacts/Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}.zip
-
-      - name: Upload TAR.GZ archive artifact
-        if: ${{ matrix.archive == 'tar' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}.tar.gz
-          path: artifacts/Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}.tar.gz
+          name: Contract2Markdown4AI-${{ matrix.rid }}-${{ github.event.inputs.version }}-files
+          path: artifacts/${{ matrix.rid }}-${{ github.event.inputs.version }}
 
   publish-portable:
     name: Publish portable framework-dependent DLL — ${{ github.event.inputs.version }}
@@ -134,22 +107,11 @@ jobs:
           fi
           cp "$main_dll" "artifacts/portable-singlefile-$version/"
 
-      - name: Compress portable single-file artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          version='${{ github.event.inputs.version }}'
-          in_dir="artifacts/portable-singlefile-$version"
-          zip_path="artifacts/Contract2Markdown4AI-portable-$version.zip"
-          if [ -f "$zip_path" ]; then rm -f "$zip_path"; fi
-          (cd "$in_dir" && zip -r "../$(basename "$zip_path")" .) || (echo "zip failed; ensure zip is available on runner" >&2; exit 1)
-          echo "Created $zip_path"
-
-      - name: Upload portable single-file artifact
+      - name: Upload portable single-file folder as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Contract2Markdown4AI-portable-${{ github.event.inputs.version }}.zip
-          path: artifacts/Contract2Markdown4AI-portable-${{ github.event.inputs.version }}.zip
+          name: Contract2Markdown4AI-portable-${{ github.event.inputs.version }}-files
+          path: artifacts/portable-singlefile-${{ github.event.inputs.version }}
 
   release:
     name: Create GitHub Release and upload artifacts — ${{ github.event.inputs.version }}
@@ -171,14 +133,38 @@ jobs:
           echo "Recursive listing:"
           ls -laR artifacts || true
 
-      - name: Collect actual archive files into release_assets directory
+      - name: Collect and normalise artifacts into release_assets directory
         run: |
           set -euo pipefail
           mkdir -p release_assets
-          find artifacts -type f \( -iname '*.zip' -o -iname '*.tar.gz' \) -print -exec cp {} release_assets/ \;
-          echo "Files copied into release_assets:"
+          version='${{ github.event.inputs.version }}'
+          # For each downloaded artifact directory, create a single archive in release_assets
+          for d in artifacts/*; do
+            [ -e "$d" ] || continue
+            name=$(basename "$d")
+            # Normalize name: remove trailing '-files' if present
+            base=${name%-files}
+            if [ -d "$d" ]; then
+              # Decide archive format: linux -> tar.gz, otherwise zip
+              if [[ "$base" == *"-linux-"* ]]; then
+                outname="release_assets/${base}.tar.gz"
+                if [ -f "$outname" ]; then rm -f "$outname"; fi
+                tar -czf "$outname" -C "$d" .
+                echo "Created $outname"
+              else
+                outname="release_assets/${base}.zip"
+                if [ -f "$outname" ]; then rm -f "$outname"; fi
+                (cd "$d" && zip -r "../$(basename "$outname")" .) || (echo "zip failed for $d" >&2; exit 1)
+                echo "Created $outname"
+              fi
+            elif [ -f "$d" ]; then
+              # If it's a single file, copy it and keep original name
+              cp "$d" release_assets/
+            fi
+          done
+          echo "Files copied/created into release_assets:"
           ls -la release_assets || true
-          test -n "$(ls -A release_assets)" || { echo "No archives found in artifacts; aborting release step." >&2; exit 1; }
+          test -n "$(ls -A release_assets)" || { echo "No artifacts found in artifacts; aborting release step." >&2; exit 1; }
 
       - name: Normalize version into tag
         id: set_tag
