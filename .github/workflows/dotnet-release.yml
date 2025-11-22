@@ -154,7 +154,8 @@ jobs:
               else
                 outname="release_assets/${base}.zip"
                 if [ -f "$outname" ]; then rm -f "$outname"; fi
-                (cd "$d" && zip -r "../$(basename "$outname")" .) || (echo "zip failed for $d" >&2; exit 1)
+                # From inside the artifact dir, ../../release_assets points to the release_assets folder at repo root
+                (cd "$d" && zip -r "../../release_assets/${base}.zip" .) || (echo "zip failed for $d" >&2; exit 1)
                 echo "Created $outname"
               fi
             elif [ -f "$d" ]; then
