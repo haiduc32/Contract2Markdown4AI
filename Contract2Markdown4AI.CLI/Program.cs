@@ -1,8 +1,7 @@
-﻿using NSwag;
-
-// Contract2Markdown4AI
-// Usage: dotnet run -- <openapi-file> [-o|--output <folder>]
-// Loads an OpenAPI (json/yaml) file with NSwag and writes one markdown file per operation.
+﻿using System.CommandLine;
+using System.CommandLine.Invocation;
+using NSwag;
+using Spectre.Console;
 
 namespace Contract2Markdown4AI.CLI;
 
@@ -10,93 +9,134 @@ class Program
 {
     static async Task<int> Main(string[] args)
     {
-        if (args.Length == 0)
-        {
-            Console.WriteLine("Usage: dotnet run -- <openapi-file> [-o|--output <folder>]");
-            return 1;
-        }
+        var outputDefault = Path.Combine(Directory.GetCurrentDirectory(), "output_md");
 
-        string inputPath = args[0];
-        string outputFolder = Path.Combine(Directory.GetCurrentDirectory(), "output_md");
+        var root = new RootCommand("C2M4AI - convert OpenAPI to Markdown files");
 
-        var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        for (int i = 1; i < args.Length; i++)
+        var inputArg = new Argument<string>("input") { Description = "Path to the OpenAPI JSON/YAML file" };
+        var outputOpt = new Option<string>("--output", "-o" ) { Description = "Output folder for generated markdown", Arity = ArgumentArity.ZeroOrOne, DefaultValueFactory = (ar) => outputDefault };
+        var metaOpt = new Option<string[]>("--meta", "-m" ) { Description = "Metadata key:value entries to pass to generator", Arity = ArgumentArity.ZeroOrMore };
+
+        root.Add(inputArg);
+        root.Add(outputOpt);
+        root.Add(metaOpt);
+
+        root.SetAction(async parseResult =>
         {
-            var a = args[i];
-            if (a == "-o" || a == "--output")
+            var input = parseResult.GetRequiredValue(inputArg);
+            var output = parseResult.GetValue(outputOpt) ?? outputDefault;
+            var metas = parseResult.GetValue(metaOpt) ?? Array.Empty<string>();
+
+            var spinner = AnsiConsole.Status();
+
+            var outputFolder = output;
+            Directory.CreateDirectory(outputFolder);
+
+            var metadata = ParseMeta(metas);
+
+            OpenApiDocument? document = null;
+            var loadFailed = false;
+
+            await spinner.StartAsync("Processing...", async statusCtx =>
             {
-                if (i + 1 < args.Length)
+                statusCtx.Status("Validating input");
+                if (!File.Exists(input))
                 {
-                    outputFolder = args[i + 1];
-                    i++;
+                    AnsiConsole.MarkupLineInterpolated($"[red]Input file not found:[/] {input}");
+                    Environment.ExitCode = 2;
+                    loadFailed = true;
+                    return;
                 }
-            }
-            else if (a == "-m" || a == "--meta")
-            {
-                if (i + 1 < args.Length)
+
+                statusCtx.Status("Loading OpenAPI document");
+                try
                 {
-                    var pair = args[i + 1];
-                    i++;
-                    var idx = pair.IndexOf(':');
-                    if (idx > 0)
+                    string content = await File.ReadAllTextAsync(input).ConfigureAwait(false);
+                    string extension = Path.GetExtension(input).ToLowerInvariant();
+                    if (extension == ".yaml" || extension == ".yml")
+                        document = await OpenApiYamlDocument.FromYamlAsync(content).ConfigureAwait(false);
+                    else
+                        document = await OpenApiDocument.FromJsonAsync(content).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLineInterpolated($"[red]Failed to load document:[/] {Spectre.Console.Markup.Escape(ex.ToString())}");
+                    Environment.ExitCode = 3;
+                    loadFailed = true;
+                    return;
+                }
+            });
+
+            if (loadFailed || document == null)
+            {
+                return;
+            }
+
+            // Run the progress display for generation outside the status spinner
+            int written = 0;
+            try
+            {
+                // compute total operations so we can show a determinate progress bar
+                int totalOps = 0;
+                var rootJson = document.ToJson();
+                using var jsonDoc = System.Text.Json.JsonDocument.Parse(rootJson);
+                var rootEl = jsonDoc.RootElement;
+                if (rootEl.TryGetProperty("paths", out var paths) && paths.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    foreach (var pathProp in paths.EnumerateObject())
                     {
-                        var key = pair.Substring(0, idx).Trim();
-                        var value = pair.Substring(idx + 1).Trim();
-                        // strip surrounding quotes if present
-                        if (value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
-                            value = value.Substring(1, value.Length - 2);
-                        if (!string.IsNullOrEmpty(key))
-                            metadata[key] = value;
+                        var methods = pathProp.Value;
+                        if (methods.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                        foreach (var methodProp in methods.EnumerateObject())
+                        {
+                            var methodNameLower = methodProp.Name.ToLowerInvariant();
+                            var allowed = new[] { "get", "post", "put", "delete", "patch", "head", "options", "trace" };
+                            if (Array.IndexOf(allowed, methodNameLower) < 0) continue;
+                            totalOps++;
+                        }
                     }
                 }
+
+                await AnsiConsole.Progress()
+                    .AutoClear(true)
+                    .StartAsync(async ctx =>
+                    {
+                        var task = ctx.AddTask("Generating files", maxValue: Math.Max(1, totalOps));
+                        var progAdapter = new Progress<int>(v => task.Value = v);
+                        var fileProg = new Progress<string?>(name => task.Description = string.IsNullOrEmpty(name) ? "Generating files" : $"{name}");
+                        written = await OpenApiToMarkdown.GenerateAsync(document, outputFolder, metadata, progAdapter, fileProg).ConfigureAwait(false);
+                        task.Value = task.MaxValue;
+                    }).ConfigureAwait(false);
             }
-        }
-
-        if (!File.Exists(inputPath))
-        {
-            Console.WriteLine($"Input file not found: {inputPath}");
-            return 2;
-        }
-
-        Directory.CreateDirectory(outputFolder);
-
-        Console.WriteLine($"Loading OpenAPI document: {inputPath}");
-        OpenApiDocument document;
-        try
-        {
-            string content = await File.ReadAllTextAsync(inputPath).ConfigureAwait(false);
-            string extension = Path.GetExtension(inputPath).ToLowerInvariant();
-            
-            if (extension == ".yaml" || extension == ".yml")
+            catch (Exception ex)
             {
-                // Parse YAML content
-                document = await OpenApiYamlDocument.FromYamlAsync(content).ConfigureAwait(false);
+                AnsiConsole.MarkupLineInterpolated($"[red]Failed to generate markdown:[/] {ex.Message}");
+                Environment.ExitCode = 4;
+                return;
             }
-            else
+
+            AnsiConsole.MarkupLineInterpolated($"[green]Done[/]. Wrote {written} files to [u]{outputFolder}[/]");
+        });
+
+        return await root.Parse(args).InvokeAsync().ConfigureAwait(false);
+    }
+
+    static Dictionary<string, string> ParseMeta(string[] metas)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in metas ?? Array.Empty<string>())
+        {
+            var idx = pair.IndexOf(':');
+            if (idx > 0)
             {
-                // Parse JSON content directly
-                document = await OpenApiDocument.FromJsonAsync(content).ConfigureAwait(false);
+                var key = pair.Substring(0, idx).Trim();
+                var value = pair.Substring(idx + 1).Trim();
+                if (value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
+                    value = value.Substring(1, value.Length - 2);
+                if (!string.IsNullOrEmpty(key))
+                    metadata[key] = value;
             }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to load document: {ex}");
-            return 3;
-        }
-
-        // delegate conversion to OpenApiToMarkdown
-        int written;
-        try
-        {
-            written = await OpenApiToMarkdown.GenerateAsync(document, outputFolder, metadata).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to generate markdown: {ex.Message}");
-            return 4;
-        }
-
-        Console.WriteLine($"Done. Wrote {written} files to {outputFolder}");
-        return 0;
+        return metadata;
     }
 }

@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Contract2Markdown4AI;
 using NSwag;
@@ -35,8 +36,52 @@ public static class OpenApiToMarkdown
             return 0;
         }
 
+        // Default: no progress
+        return await GenerateAsync(document, outputFolder, metadata, progress: null).ConfigureAwait(false);
+    }
+
+    public static async Task<int> GenerateAsync(OpenApiDocument document, string outputFolder, IDictionary<string, string>? metadata = null, IProgress<int>? progress = null, IProgress<string?>? filenameProgress = null)
+    {
+        if (document == null) throw new ArgumentNullException(nameof(document));
+        if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentNullException(nameof(outputFolder));
+
+        Directory.CreateDirectory(outputFolder);
+
+        var docJson = document.ToJson();
+        using var jsonDoc = JsonDocument.Parse(docJson);
+        var root = jsonDoc.RootElement;
+
+        string apiTitle = "API";
+        if (root.TryGetProperty("info", out var info) && info.ValueKind == JsonValueKind.Object)
+        {
+            if (info.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String)
+                apiTitle = t.GetString() ?? apiTitle;
+        }
+
+        if (!root.TryGetProperty("paths", out var paths) || paths.ValueKind != JsonValueKind.Object)
+        {
+            Console.WriteLine("No paths found in the OpenAPI document.");
+            return 0;
+        }
+
+        // Pre-calc how many operation files will be created so callers can show a determinate progress bar
+        var operationCount = 0;
+        foreach (var pathProp in paths.EnumerateObject())
+        {
+            var methods = pathProp.Value;
+            if (methods.ValueKind != JsonValueKind.Object) continue;
+            foreach (var methodProp in methods.EnumerateObject())
+            {
+                var methodNameLower = methodProp.Name.ToLowerInvariant();
+                var allowed = new[] { "get", "post", "put", "delete", "patch", "head", "options", "trace" };
+                if (Array.IndexOf(allowed, methodNameLower) < 0) continue;
+                operationCount++;
+            }
+        }
+
     int written = 0;
     var indexEntries = new List<(string File, string Method, string Path, string OperationId, string FriendlyName)>();
+    var writtenPaths = new List<string>();
     // shared per-run expansion cache for component expansions
     var expansionCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var pathProp in paths.EnumerateObject())
@@ -308,8 +353,10 @@ public static class OpenApiToMarkdown
                 var safe = string.Join("_", rawFileName.Split(Path.GetInvalidFileNameChars()));
                 var outPath = Path.Combine(outputFolder, safe);
                 await File.WriteAllTextAsync(outPath, sb.ToString()).ConfigureAwait(false);
-                Console.WriteLine($"Wrote {outPath}");
                 written++;
+                writtenPaths.Add(outPath);
+                try { progress?.Report(written); } catch { }
+                try { filenameProgress?.Report(Path.GetFileName(outPath)); } catch { }
 
                 // record index entry (use filename only for linking)
                 indexEntries.Add((Path.GetFileName(outPath), httpMethod, path, operationId ?? string.Empty, friendlyName));
@@ -387,7 +434,10 @@ public static class OpenApiToMarkdown
 
                 var compPath = Path.Combine(outputFolder, "components.md");
                 await File.WriteAllTextAsync(compPath, comp.ToString()).ConfigureAwait(false);
-                Console.WriteLine($"Wrote {compPath}");
+                written++;
+                writtenPaths.Add(compPath);
+                try { progress?.Report(written); } catch { }
+                try { filenameProgress?.Report(Path.GetFileName(compPath)); } catch { }
             }
         }
         catch (Exception ex)
@@ -429,12 +479,23 @@ public static class OpenApiToMarkdown
 
             var indexPath = Path.Combine(outputFolder, "Index.md");
             await File.WriteAllTextAsync(indexPath, idx.ToString()).ConfigureAwait(false);
-            Console.WriteLine($"Wrote {indexPath}");
+            written++;
+            writtenPaths.Add(indexPath);
+            try { progress?.Report(written); } catch { }
+            try { filenameProgress?.Report(Path.GetFileName(indexPath)); } catch { }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to write Index.md: {ex.Message}");
         }
+
+        // Print generated files list once at the end
+        try
+        {
+            foreach (var p in writtenPaths)
+                Console.WriteLine($"Wrote {p}");
+        }
+        catch { }
 
         return written;
     }
