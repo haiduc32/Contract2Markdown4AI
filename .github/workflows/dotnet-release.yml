@@ -104,14 +104,14 @@ jobs:
             -p:DebugType=None \
             -o "$out"
           ls $out
-          # Keep only the main DLL to create a single-file artifact that runs via `dotnet <dll>` on any platform with .NET installed
+          # Keep only the main file to create a single-file artifact that runs via `dotnet C2M4AI` on any platform with .NET installed
           mkdir -p "artifacts/portable-singlefile-$version"
-          main_dll=$(ls "$out"/*.exe | head -n 1)
-          if [ -z "$main_dll" ]; then
-            echo "No DLL produced by publish; aborting." >&2
+          main_file=$(ls "$out"/C2M4AI | head -n 1)
+          if [ -z "$main_file" ]; then
+            echo "No file produced by publish; aborting." >&2
             exit 1
           fi
-          cp "$main_dll" "artifacts/portable-singlefile-$version/"
+          cp "$main_file" "artifacts/portable-singlefile-$version/"
 
       - name: Upload portable single-file folder as artifact
         uses: actions/upload-artifact@v4
