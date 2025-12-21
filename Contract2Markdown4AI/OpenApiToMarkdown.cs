@@ -10,8 +10,18 @@ using NSwag;
 
 namespace Contract2Markdown4AI;
 
+/// <summary>
+/// Provides functionality to convert an OpenAPI document to Markdown files.
+/// </summary>
 public static class OpenApiToMarkdown
 {
+    /// <summary>
+    /// Generates Markdown files from an OpenAPI document.
+    /// </summary>
+    /// <param name="document">The OpenAPI document to convert.</param>
+    /// <param name="outputFolder">The folder where the Markdown files will be generated.</param>
+    /// <param name="metadata">Optional metadata to include in the YAML front-matter of the generated files.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the number of files written.</returns>
     public static async Task<int> GenerateAsync(OpenApiDocument document, string outputFolder, IDictionary<string, string>? metadata = null)
     {
         if (document == null) throw new ArgumentNullException(nameof(document));
@@ -40,6 +50,15 @@ public static class OpenApiToMarkdown
         return await GenerateAsync(document, outputFolder, metadata, progress: null).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Generates Markdown files from an OpenAPI document with progress reporting.
+    /// </summary>
+    /// <param name="document">The OpenAPI document to convert.</param>
+    /// <param name="outputFolder">The folder where the Markdown files will be generated.</param>
+    /// <param name="metadata">Optional metadata to include in the YAML front-matter of the generated files.</param>
+    /// <param name="progress">Optional progress reporter for the number of files written.</param>
+    /// <param name="filenameProgress">Optional progress reporter for the name of the file currently being written.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the number of files written.</returns>
     public static async Task<int> GenerateAsync(OpenApiDocument document, string outputFolder, IDictionary<string, string>? metadata = null, IProgress<int>? progress = null, IProgress<string?>? filenameProgress = null)
     {
         if (document == null) throw new ArgumentNullException(nameof(document));

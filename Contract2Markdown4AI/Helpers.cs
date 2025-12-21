@@ -5,8 +5,18 @@ namespace Contract2Markdown4AI;
 using System.Text;
 using System.Text.Json;
 
-public class Helpers
+/// <summary>
+/// Provides helper methods for processing JSON schemas and OpenAPI documents.
+/// </summary>
+class Helpers
 {
+    /// <summary>
+    /// Resolves a local JSON reference within a root element.
+    /// </summary>
+    /// <param name="rootElement">The root JSON element to search within.</param>
+    /// <param name="reference">The JSON reference string (e.g., "#/components/schemas/MyModel").</param>
+    /// <returns>The resolved JSON element.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the reference is not local or cannot be found.</exception>
     public static JsonElement ResolveReference(JsonElement rootElement, string reference)
     {
         if (string.IsNullOrWhiteSpace(reference) || !reference.StartsWith("#/"))
@@ -23,7 +33,12 @@ public class Helpers
         return current;
     }
 
-    // Helper: normalize a block of lines by removing common leading indentation and prefixing each line with the provided prefix.
+    /// <summary>
+    /// Normalizes a block of text by removing common leading indentation and prefixing each line.
+    /// </summary>
+    /// <param name="block">The text block to normalize.</param>
+    /// <param name="prefix">The prefix to add to each line.</param>
+    /// <returns>A list of normalized and indented lines.</returns>
     public static List<string> NormalizeAndIndent(string block, string prefix)
     {
         var lines = block.Split(new[] { '\n' }, StringSplitOptions.None).Select(l => l.Replace("\r", "")).ToList();
@@ -48,6 +63,12 @@ public class Helpers
         return outLines;
     }
 
+    /// <summary>
+    /// Gets a short name for a schema, either from its reference or its type.
+    /// </summary>
+    /// <param name="schema">The JSON schema element.</param>
+    /// <param name="root">The root JSON element for reference resolution.</param>
+    /// <returns>A short name for the schema.</returns>
     public static string GetSchemaShortName(JsonElement schema, JsonElement root)
     {
         try
@@ -68,6 +89,12 @@ public class Helpers
         return "";
     }
 
+    /// <summary>
+    /// Summarizes a JSON schema into a human-readable string.
+    /// </summary>
+    /// <param name="schema">The JSON schema element to summarize.</param>
+    /// <param name="root">The root JSON element for reference resolution.</param>
+    /// <returns>A summarized string representation of the schema.</returns>
     public static string SummarizeSchema(JsonElement schema, JsonElement root)
     {
         // Expand schemas to arbitrary depth, following $ref and arrays.
@@ -84,7 +111,13 @@ public class Helpers
         }
     }
 
-    // Overload that accepts a shared per-run cache so callers can reuse component expansions.
+    /// <summary>
+    /// Summarizes a JSON schema into a human-readable string using a shared cache.
+    /// </summary>
+    /// <param name="schema">The JSON schema element to summarize.</param>
+    /// <param name="root">The root JSON element for reference resolution.</param>
+    /// <param name="cache">A shared cache for component expansions.</param>
+    /// <returns>A summarized string representation of the schema.</returns>
     public static string SummarizeSchema(JsonElement schema, JsonElement root, Dictionary<string, string> cache)
     {
         try
@@ -98,7 +131,14 @@ public class Helpers
         }
     }
 
-    // Overload allowing caller to control whether component $refs (#/components/schemas/...) are expanded inline or left as $ref lines.
+    /// <summary>
+    /// Summarizes a JSON schema into a human-readable string with control over component reference expansion.
+    /// </summary>
+    /// <param name="schema">The JSON schema element to summarize.</param>
+    /// <param name="root">The root JSON element for reference resolution.</param>
+    /// <param name="cache">A shared cache for component expansions.</param>
+    /// <param name="expandComponentRefs">If true, expands component references inline; otherwise, leaves them as references.</param>
+    /// <returns>A summarized string representation of the schema.</returns>
     public static string SummarizeSchema(JsonElement schema, JsonElement root, Dictionary<string, string> cache, bool expandComponentRefs)
     {
         try
@@ -112,6 +152,16 @@ public class Helpers
         }
     }
 
+    /// <summary>
+    /// Recursively expands a JSON schema into a human-readable string.
+    /// </summary>
+    /// <param name="schema">The JSON schema element to expand.</param>
+    /// <param name="root">The root JSON element for reference resolution.</param>
+    /// <param name="seenRefs">A set of already seen references to prevent infinite recursion.</param>
+    /// <param name="indent">The current indentation level.</param>
+    /// <param name="cache">A shared cache for component expansions.</param>
+    /// <param name="expandComponentRefs">If true, expands component references inline; otherwise, leaves them as references.</param>
+    /// <returns>An expanded string representation of the schema.</returns>
     public static string ExpandSchema(JsonElement schema, JsonElement root, HashSet<string> seenRefs, int indent, Dictionary<string, string>? cache, bool expandComponentRefs)
     {
         var sb = new StringBuilder();
