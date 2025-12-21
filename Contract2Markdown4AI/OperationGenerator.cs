@@ -42,6 +42,23 @@ public class OperationGenerator
         var indexEntries = new List<(string File, string Method, string Path, string OperationId, string FriendlyName)>();
         var writtenPaths = new List<string>();
 
+        await foreach (var op in GetOperationsAsync(paths).ConfigureAwait(false))
+        {
+            var outPath = Path.Combine(_outputFolder, op.FileName);
+            await File.WriteAllTextAsync(outPath, op.Content).ConfigureAwait(false);
+            written++;
+            writtenPaths.Add(outPath);
+            try { _progress?.Report(written); } catch { }
+            try { _filenameProgress?.Report(op.FileName); } catch { }
+
+            indexEntries.Add((op.FileName, op.Method, op.Path, op.OperationId, op.FriendlyName));
+        }
+
+        return (written, indexEntries, writtenPaths);
+    }
+
+    public async IAsyncEnumerable<(string FileName, string Content, string Method, string Path, string OperationId, string FriendlyName)> GetOperationsAsync(JsonElement paths)
+    {
         foreach (var pathProp in paths.EnumerateObject())
         {
             var path = pathProp.Name;
@@ -302,18 +319,10 @@ public class OperationGenerator
 
                 var rawFileName = (string.IsNullOrWhiteSpace(operationId) ? (httpMethod + "_" + path) : operationId) + ".md";
                 var safe = string.Join("_", rawFileName.Split(Path.GetInvalidFileNameChars()));
-                var outPath = Path.Combine(_outputFolder, safe);
-                await File.WriteAllTextAsync(outPath, sb.ToString()).ConfigureAwait(false);
-                written++;
-                writtenPaths.Add(outPath);
-                try { _progress?.Report(written); } catch { }
-                try { _filenameProgress?.Report(Path.GetFileName(outPath)); } catch { }
-
-                indexEntries.Add((Path.GetFileName(outPath), httpMethod, path, operationId ?? string.Empty, friendlyName));
+                
+                yield return (safe, sb.ToString(), httpMethod, path, operationId ?? string.Empty, friendlyName);
             }
         }
-
-        return (written, indexEntries, writtenPaths);
     }
 
     private void ProcessResponseSchema(JsonElement schema, HashSet<string> modelsToInclude, StringBuilder sb)

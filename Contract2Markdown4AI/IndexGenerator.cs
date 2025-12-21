@@ -33,49 +33,48 @@ public class IndexGenerator
         int written = 0;
         var writtenPaths = new List<string>();
 
-        try
-        {
-            var idx = new StringBuilder();
-
-            // Prepend YAML front-matter metadata if provided
-            if (_metadata != null && _metadata.Count > 0)
-            {
-                idx.AppendLine("---");
-                foreach (var kv in _metadata)
-                {
-                    var v = kv.Value?.Replace("\"", "\\\"") ?? string.Empty;
-                    idx.AppendLine($"{kv.Key}: \"{v}\"");
-                }
-                idx.AppendLine("---");
-                idx.AppendLine();
-            }
-
-            idx.AppendLine($"# {_apiTitle} - Operations Index");
-            idx.AppendLine();
-            idx.AppendLine("| Operation | OperationId | Method | Path |");
-            idx.AppendLine("|---|---|---|---|");
-            foreach (var e in indexEntries)
-            {
-                var fileLink = e.File;
-                var opText = string.IsNullOrWhiteSpace(e.FriendlyName) ? (string.IsNullOrWhiteSpace(e.OperationId) ? fileLink : e.OperationId) : e.FriendlyName;
-                var opIdText = string.IsNullOrWhiteSpace(e.OperationId) ? "" : e.OperationId;
-                // make path monospace and escape vertical bars
-                var pathEscaped = e.Path.Replace("|", "\\|");
-                idx.AppendLine($"| [{opText}](./{fileLink}) | {opIdText} | {e.Method} | `{pathEscaped}` |");
-            }
-
-            var indexPath = Path.Combine(_outputFolder, "Index.md");
-            await File.WriteAllTextAsync(indexPath, idx.ToString()).ConfigureAwait(false);
-            written++;
-            writtenPaths.Add(indexPath);
-            try { _progress?.Report(written); } catch { }
-            try { _filenameProgress?.Report(Path.GetFileName(indexPath)); } catch { }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to write Index.md: {ex.Message}");
-        }
+        var (fileName, content) = GetIndex(indexEntries);
+        var indexPath = Path.Combine(_outputFolder, fileName);
+        await File.WriteAllTextAsync(indexPath, content).ConfigureAwait(false);
+        written++;
+        writtenPaths.Add(indexPath);
+        try { _progress?.Report(written); } catch { }
+        try { _filenameProgress?.Report(fileName); } catch { }
 
         return (written, writtenPaths);
+    }
+
+    public (string FileName, string Content) GetIndex(List<(string File, string Method, string Path, string OperationId, string FriendlyName)> indexEntries)
+    {
+        var idx = new StringBuilder();
+
+        // Prepend YAML front-matter metadata if provided
+        if (_metadata != null && _metadata.Count > 0)
+        {
+            idx.AppendLine("---");
+            foreach (var kv in _metadata)
+            {
+                var v = kv.Value?.Replace("\"", "\\\"") ?? string.Empty;
+                idx.AppendLine($"{kv.Key}: \"{v}\"");
+            }
+            idx.AppendLine("---");
+            idx.AppendLine();
+        }
+
+        idx.AppendLine($"# {_apiTitle} - Operations Index");
+        idx.AppendLine();
+        idx.AppendLine("| Operation | OperationId | Method | Path |");
+        idx.AppendLine("|---|---|---|---|");
+        foreach (var e in indexEntries)
+        {
+            var fileLink = e.File;
+            var opText = string.IsNullOrWhiteSpace(e.FriendlyName) ? (string.IsNullOrWhiteSpace(e.OperationId) ? fileLink : e.OperationId) : e.FriendlyName;
+            var opIdText = string.IsNullOrWhiteSpace(e.OperationId) ? "" : e.OperationId;
+            // make path monospace and escape vertical bars
+            var pathEscaped = e.Path.Replace("|", "\\|");
+            idx.AppendLine($"| [{opText}](./{fileLink}) | {opIdText} | {e.Method} | `{pathEscaped}` |");
+        }
+
+        return ("Index.md", idx.ToString());
     }
 }

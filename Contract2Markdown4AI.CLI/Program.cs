@@ -104,7 +104,7 @@ class Program
                         var task = ctx.AddTask("Generating files", maxValue: Math.Max(1, totalOps));
                         var progAdapter = new Progress<int>(v => task.Value = v);
                         var fileProg = new Progress<string?>(name => task.Description = string.IsNullOrEmpty(name) ? "Generating files" : $"{name}");
-                        written = await OpenApiToMarkdown.GenerateAsync(document, outputFolder, metadata, progAdapter, fileProg).ConfigureAwait(false);
+                        written = await OpenApiToMarkdown.GenerateFilesAsync(document, outputFolder, metadata, progAdapter, fileProg).ConfigureAwait(false);
                         task.Value = task.MaxValue;
                     }).ConfigureAwait(false);
             }

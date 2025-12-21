@@ -37,86 +37,87 @@ public class ComponentGenerator
         int written = 0;
         var writtenPaths = new List<string>();
 
-        try
+        await foreach (var comp in GetComponentsAsync().ConfigureAwait(false))
         {
-            var schemasToDocument = new List<(string name, JsonElement schema)>();
-            
-            // Check for OpenAPI 3.0 components/schemas
-            if (_root.TryGetProperty("components", out var components) && components.ValueKind == JsonValueKind.Object &&
-                components.TryGetProperty("schemas", out var schemas) && schemas.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var schema in schemas.EnumerateObject())
-                {
-                    schemasToDocument.Add((schema.Name, schema.Value));
-                }
-            }
-            
-            // Check for Swagger 2.0 definitions
-            if (_root.TryGetProperty("definitions", out var definitions) && definitions.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var def in definitions.EnumerateObject())
-                {
-                    schemasToDocument.Add((def.Name, def.Value));
-                }
-            }
-
-            if (schemasToDocument.Count > 0)
-            {
-                var comp = new StringBuilder();
-                if (_metadata != null && _metadata.Count > 0)
-                {
-                    comp.AppendLine("---");
-                    foreach (var kv in _metadata)
-                    {
-                        var v = kv.Value?.Replace("\"", "\\\"") ?? string.Empty;
-                        comp.AppendLine($"{kv.Key}: \"{v}\"");
-                    }
-                    comp.AppendLine("---");
-                    comp.AppendLine();
-                }
-                comp.AppendLine("# Components");
-                comp.AppendLine();
-                
-                foreach (var (name, schemaValue) in schemasToDocument)
-                {
-                    comp.AppendLine($"## {name}");
-                    comp.AppendLine();
-                    try
-                    {
-                        var expanded = Helpers.SummarizeSchema(schemaValue, _root, _expansionCache);
-                        if (!string.IsNullOrWhiteSpace(expanded))
-                        {
-                            comp.AppendLine("```");
-                            comp.AppendLine(expanded.TrimEnd());
-                            comp.AppendLine("```");
-                        }
-                        else
-                        {
-                            comp.AppendLine("```json");
-                            comp.AppendLine(JsonSerializer.Serialize(schemaValue, new JsonSerializerOptions { WriteIndented = true }));
-                            comp.AppendLine("```");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        comp.AppendLine($"Failed to expand {name}: {ex.Message}");
-                    }
-                    comp.AppendLine();
-                }
-
-                var compPath = Path.Combine(_outputFolder, "components.md");
-                await File.WriteAllTextAsync(compPath, comp.ToString()).ConfigureAwait(false);
-                written++;
-                writtenPaths.Add(compPath);
-                try { _progress?.Report(written); } catch { }
-                try { _filenameProgress?.Report(Path.GetFileName(compPath)); } catch { }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to write components.md: {ex.Message}");
+            var compPath = Path.Combine(_outputFolder, comp.FileName);
+            await File.WriteAllTextAsync(compPath, comp.Content).ConfigureAwait(false);
+            written++;
+            writtenPaths.Add(compPath);
+            try { _progress?.Report(written); } catch { }
+            try { _filenameProgress?.Report(comp.FileName); } catch { }
         }
 
         return (written, writtenPaths);
+    }
+
+    public async IAsyncEnumerable<(string FileName, string Content)> GetComponentsAsync()
+    {
+        var schemasToDocument = new List<(string name, JsonElement schema)>();
+        
+        // Check for OpenAPI 3.0 components/schemas
+        if (_root.TryGetProperty("components", out var components) && components.ValueKind == JsonValueKind.Object &&
+            components.TryGetProperty("schemas", out var schemas) && schemas.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var schema in schemas.EnumerateObject())
+            {
+                schemasToDocument.Add((schema.Name, schema.Value));
+            }
+        }
+        
+        // Check for Swagger 2.0 definitions
+        if (_root.TryGetProperty("definitions", out var definitions) && definitions.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var def in definitions.EnumerateObject())
+            {
+                schemasToDocument.Add((def.Name, def.Value));
+            }
+        }
+
+        if (schemasToDocument.Count > 0)
+        {
+            var comp = new StringBuilder();
+            if (_metadata != null && _metadata.Count > 0)
+            {
+                comp.AppendLine("---");
+                foreach (var kv in _metadata)
+                {
+                    var v = kv.Value?.Replace("\"", "\\\"") ?? string.Empty;
+                    comp.AppendLine($"{kv.Key}: \"{v}\"");
+                }
+                comp.AppendLine("---");
+                comp.AppendLine();
+            }
+            comp.AppendLine("# Components");
+            comp.AppendLine();
+            
+            foreach (var (name, schemaValue) in schemasToDocument)
+            {
+                comp.AppendLine($"## {name}");
+                comp.AppendLine();
+                try
+                {
+                    var expanded = Helpers.SummarizeSchema(schemaValue, _root, _expansionCache);
+                    if (!string.IsNullOrWhiteSpace(expanded))
+                    {
+                        comp.AppendLine("```");
+                        comp.AppendLine(expanded.TrimEnd());
+                        comp.AppendLine("```");
+                    }
+                    else
+                    {
+                        comp.AppendLine("```json");
+                        comp.AppendLine(JsonSerializer.Serialize(schemaValue, new JsonSerializerOptions { WriteIndented = true }));
+                        comp.AppendLine("```");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    comp.AppendLine($"Failed to expand {name}: {ex.Message}");
+                }
+                comp.AppendLine();
+            }
+
+            yield return ("components.md", comp.ToString());
+        }
     }
 }
