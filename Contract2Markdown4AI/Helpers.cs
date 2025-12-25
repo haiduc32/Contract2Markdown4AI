@@ -116,7 +116,7 @@ class Helpers
     /// </summary>
     /// <param name="schema">The JSON schema element to summarize.</param>
     /// <param name="root">The root JSON element for reference resolution.</param>
-    /// <param name="cache">A shared cache for component expansions.</param>
+    /// <param name="cache">A shared cache for schema expansions.</param>
     /// <returns>A summarized string representation of the schema.</returns>
     public static string SummarizeSchema(JsonElement schema, JsonElement root, Dictionary<string, string> cache)
     {
@@ -132,19 +132,19 @@ class Helpers
     }
 
     /// <summary>
-    /// Summarizes a JSON schema into a human-readable string with control over component reference expansion.
+    /// Summarizes a JSON schema into a human-readable string with control over schema reference expansion.
     /// </summary>
     /// <param name="schema">The JSON schema element to summarize.</param>
     /// <param name="root">The root JSON element for reference resolution.</param>
-    /// <param name="cache">A shared cache for component expansions.</param>
-    /// <param name="expandComponentRefs">If true, expands component references inline; otherwise, leaves them as references.</param>
+    /// <param name="cache">A shared cache for schema expansions.</param>
+    /// <param name="expandSchemaRefs">If true, expands schema references inline; otherwise, leaves them as references.</param>
     /// <returns>A summarized string representation of the schema.</returns>
-    public static string SummarizeSchema(JsonElement schema, JsonElement root, Dictionary<string, string> cache, bool expandComponentRefs)
+    public static string SummarizeSchema(JsonElement schema, JsonElement root, Dictionary<string, string> cache, bool expandSchemaRefs)
     {
         try
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            return ExpandSchema(schema, root, seen, 0, cache, expandComponentRefs).TrimEnd();
+            return ExpandSchema(schema, root, seen, 0, cache, expandSchemaRefs).TrimEnd();
         }
         catch
         {
@@ -159,10 +159,10 @@ class Helpers
     /// <param name="root">The root JSON element for reference resolution.</param>
     /// <param name="seenRefs">A set of already seen references to prevent infinite recursion.</param>
     /// <param name="indent">The current indentation level.</param>
-    /// <param name="cache">A shared cache for component expansions.</param>
-    /// <param name="expandComponentRefs">If true, expands component references inline; otherwise, leaves them as references.</param>
+    /// <param name="cache">A shared cache for schema expansions.</param>
+    /// <param name="expandSchemaRefs">If true, expands schema references inline; otherwise, leaves them as references.</param>
     /// <returns>An expanded string representation of the schema.</returns>
-    public static string ExpandSchema(JsonElement schema, JsonElement root, HashSet<string> seenRefs, int indent, Dictionary<string, string>? cache, bool expandComponentRefs)
+    public static string ExpandSchema(JsonElement schema, JsonElement root, HashSet<string> seenRefs, int indent, Dictionary<string, string>? cache, bool expandSchemaRefs)
     {
         var sb = new StringBuilder();
         string ind = new string(' ', indent * 2);
@@ -186,10 +186,10 @@ class Helpers
                 return sb.ToString();
             }
 
-            // If this is a components schema reference and caller requested not to expand component refs inline,
+            // If this is a schema reference and caller requested not to expand schema refs inline,
             // just print the $ref and don't resolve it here.
             // Handle both OpenAPI 3.0 (#/components/schemas/) and Swagger 2.0 (#/definitions/)
-            if (!expandComponentRefs && 
+            if (!expandSchemaRefs && 
                 (r.StartsWith("#/components/schemas/", StringComparison.OrdinalIgnoreCase) ||
                  r.StartsWith("#/definitions/", StringComparison.OrdinalIgnoreCase)))
             {
@@ -213,7 +213,7 @@ class Helpers
             {
                 var resolved = ResolveReference(root, r);
                 // compute canonical expansion for caching at base indent 0
-                var canonical = ExpandSchema(resolved, root, seenRefs, 0, cache, expandComponentRefs);
+                var canonical = ExpandSchema(resolved, root, seenRefs, 0, cache, expandSchemaRefs);
                 if (cache != null)
                 {
                     try { cache[r] = canonical; } catch { }
@@ -254,7 +254,7 @@ class Helpers
                     {
                         sb.Append(ind + "  - " + prop.Name + ": ");
                         // expand property schema inline and normalize lines
-                        var propExpansion = ExpandSchema(prop.Value, root, seenRefs, indent + 2, cache, expandComponentRefs);
+                        var propExpansion = ExpandSchema(prop.Value, root, seenRefs, indent + 2, cache, expandSchemaRefs);
                         if (string.IsNullOrWhiteSpace(propExpansion))
                         {
                             sb.AppendLine("(unknown)");
@@ -288,7 +288,7 @@ class Helpers
                 if (schema.TryGetProperty("items", out var items))
                 {
                     sb.AppendLine(ind + "items:");
-                    var itemsExpansion = ExpandSchema(items, root, seenRefs, indent + 1, cache, expandComponentRefs);
+                    var itemsExpansion = ExpandSchema(items, root, seenRefs, indent + 1, cache, expandSchemaRefs);
                     var normalized = NormalizeAndIndent(itemsExpansion, ind + "  ");
                     foreach (var line in normalized)
                         sb.AppendLine(line);
@@ -321,7 +321,7 @@ class Helpers
             foreach (var item in oneOf.EnumerateArray())
             {
                 sb.AppendLine(ind + $"  - option{idx}:");
-                var opt = ExpandSchema(item, root, seenRefs, indent + 2, cache, expandComponentRefs);
+                var opt = ExpandSchema(item, root, seenRefs, indent + 2, cache, expandSchemaRefs);
                 var norm = NormalizeAndIndent(opt, ind + "    ");
                 foreach (var l in norm)
                     sb.AppendLine(l);
@@ -336,7 +336,7 @@ class Helpers
             foreach (var item in anyOf.EnumerateArray())
             {
                 sb.AppendLine(ind + $"  - option{idx}:");
-                var opt = ExpandSchema(item, root, seenRefs, indent + 2, cache, expandComponentRefs);
+                var opt = ExpandSchema(item, root, seenRefs, indent + 2, cache, expandSchemaRefs);
                 var norm = NormalizeAndIndent(opt, ind + "    ");
                 foreach (var l in norm)
                     sb.AppendLine(l);
@@ -351,7 +351,7 @@ class Helpers
             foreach (var item in allOf.EnumerateArray())
             {
                 sb.AppendLine(ind + $"  - part{idx}:");
-                var opt = ExpandSchema(item, root, seenRefs, indent + 2, cache, expandComponentRefs);
+                var opt = ExpandSchema(item, root, seenRefs, indent + 2, cache, expandSchemaRefs);
                 var norm = NormalizeAndIndent(opt, ind + "    ");
                 foreach (var l in norm)
                     sb.AppendLine(l);

@@ -127,7 +127,7 @@ public class OpenApiToMarkdownTests
         Assert.NotEmpty(results);
         Assert.Contains(results, r => r.FileName.Contains("addPet.md", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(results, r => r.FileName.Contains("getPetById.md", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(results, r => r.FileName == "components.md");
+        Assert.Contains(results, r => r.FileName == "Schemas.md");
         Assert.Contains(results, r => r.FileName == "Index.md");
 
         var addPet = results.First(r => r.FileName.Contains("addPet.md", StringComparison.OrdinalIgnoreCase));
@@ -135,8 +135,8 @@ public class OpenApiToMarkdownTests
         Assert.Equal("POST", addPet.Metadata["Method"]);
         Assert.Equal("/pet", addPet.Metadata["Path"]);
 
-        var components = results.First(r => r.FileName == "components.md");
-        Assert.Equal(GeneratedFileType.Component, components.FileType);
+        var schemas = results.First(r => r.FileName == "Schemas.md");
+        Assert.Equal(GeneratedFileType.Schema, schemas.FileType);
 
         var index = results.First(r => r.FileName == "Index.md");
         Assert.Equal(GeneratedFileType.Index, index.FileType);

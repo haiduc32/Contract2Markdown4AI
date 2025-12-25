@@ -6,7 +6,7 @@ A .NET library and CLI tool to convert OpenAPI/Swagger contracts into Markdown f
 
 - Converts OpenAPI 3.0 and Swagger 2.0 (JSON/YAML) to Markdown.
 - Generates separate files for each operation for better granularity.
-- Includes component schemas and security definitions.
+- Includes schemas and security definitions.
 - Optimized for AI context windows.
 
 ## Installation

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Contract2Markdown4AI;
 
-public class ComponentGenerator
+public class SchemaGenerator
 {
     private readonly JsonElement _root;
     private readonly string _outputFolder;
@@ -16,7 +16,7 @@ public class ComponentGenerator
     private readonly IProgress<int>? _progress;
     private readonly IProgress<string?>? _filenameProgress;
 
-    public ComponentGenerator(
+    public SchemaGenerator(
         JsonElement root,
         string outputFolder,
         IDictionary<string, string>? metadata,
@@ -32,31 +32,30 @@ public class ComponentGenerator
         _filenameProgress = filenameProgress;
     }
 
-    public async Task<(int WrittenCount, List<string> WrittenPaths)> GenerateComponentsAsync()
+    public async Task<(int WrittenCount, List<string> WrittenPaths)> GenerateSchemasAsync()
     {
         int written = 0;
         var writtenPaths = new List<string>();
 
-        await foreach (var comp in GetComponentsAsync().ConfigureAwait(false))
+        await foreach (var schema in GetSchemasAsync().ConfigureAwait(false))
         {
-            var compPath = Path.Combine(_outputFolder, comp.FileName);
-            await File.WriteAllTextAsync(compPath, comp.Content).ConfigureAwait(false);
+            var schemaPath = Path.Combine(_outputFolder, schema.FileName);
+            await File.WriteAllTextAsync(schemaPath, schema.Content).ConfigureAwait(false);
             written++;
-            writtenPaths.Add(compPath);
+            writtenPaths.Add(schemaPath);
             try { _progress?.Report(written); } catch { }
-            try { _filenameProgress?.Report(comp.FileName); } catch { }
+            try { _filenameProgress?.Report(schema.FileName); } catch { }
         }
 
         return (written, writtenPaths);
     }
 
-    public async IAsyncEnumerable<(string FileName, string Content)> GetComponentsAsync()
+    public async IAsyncEnumerable<(string FileName, string Content)> GetSchemasAsync(bool independent = false)
     {
         var schemasToDocument = new List<(string name, JsonElement schema)>();
         
-        // Check for OpenAPI 3.0 components/schemas
-        if (_root.TryGetProperty("components", out var components) && components.ValueKind == JsonValueKind.Object &&
-            components.TryGetProperty("schemas", out var schemas) && schemas.ValueKind == JsonValueKind.Object)
+        // Check for OpenAPI 3.0 schemas
+        if (_root.TryGetProperty("schemas", out var schemas) && schemas.ValueKind == JsonValueKind.Object)
         {
             foreach (var schema in schemas.EnumerateObject())
             {
@@ -75,49 +74,95 @@ public class ComponentGenerator
 
         if (schemasToDocument.Count > 0)
         {
-            var comp = new StringBuilder();
-            if (_metadata != null && _metadata.Count > 0)
+            if (independent)
             {
-                comp.AppendLine("---");
-                foreach (var kv in _metadata)
+                foreach (var (name, schemaValue) in schemasToDocument)
                 {
-                    var v = kv.Value?.Replace("\"", "\\\"") ?? string.Empty;
-                    comp.AppendLine($"{kv.Key}: \"{v}\"");
-                }
-                comp.AppendLine("---");
-                comp.AppendLine();
-            }
-            comp.AppendLine("# Components");
-            comp.AppendLine();
-            
-            foreach (var (name, schemaValue) in schemasToDocument)
-            {
-                comp.AppendLine($"## {name}");
-                comp.AppendLine();
-                try
-                {
-                    var expanded = Helpers.SummarizeSchema(schemaValue, _root, _expansionCache);
-                    if (!string.IsNullOrWhiteSpace(expanded))
+                    var comp = new StringBuilder();
+                    if (_metadata != null && _metadata.Count > 0)
                     {
-                        comp.AppendLine("```");
-                        comp.AppendLine(expanded.TrimEnd());
-                        comp.AppendLine("```");
+                        comp.AppendLine("---");
+                        foreach (var kv in _metadata)
+                        {
+                            var v = kv.Value?.Replace("\"", "\\\"") ?? string.Empty;
+                            comp.AppendLine($"{kv.Key}: \"{v}\"");
+                        }
+                        comp.AppendLine("---");
+                        comp.AppendLine();
                     }
-                    else
+                    comp.AppendLine($"# {name}");
+                    comp.AppendLine();
+                    try
                     {
-                        comp.AppendLine("```json");
-                        comp.AppendLine(JsonSerializer.Serialize(schemaValue, new JsonSerializerOptions { WriteIndented = true }));
-                        comp.AppendLine("```");
+                        var expanded = Helpers.SummarizeSchema(schemaValue, _root, _expansionCache);
+                        if (!string.IsNullOrWhiteSpace(expanded))
+                        {
+                            comp.AppendLine("```");
+                            comp.AppendLine(expanded.TrimEnd());
+                            comp.AppendLine("```");
+                        }
+                        else
+                        {
+                            comp.AppendLine("```json");
+                            comp.AppendLine(JsonSerializer.Serialize(schemaValue, new JsonSerializerOptions { WriteIndented = true }));
+                            comp.AppendLine("```");
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    comp.AppendLine($"Failed to expand {name}: {ex.Message}");
-                }
-                comp.AppendLine();
-            }
+                    catch (Exception ex)
+                    {
+                        comp.AppendLine($"Failed to expand {name}: {ex.Message}");
+                    }
+                    comp.AppendLine();
 
-            yield return ("components.md", comp.ToString());
+                    yield return (Path.Combine("schemas", $"{name}.md"), comp.ToString());
+                }
+            }
+            else
+            {
+                var comp = new StringBuilder();
+                if (_metadata != null && _metadata.Count > 0)
+                {
+                    comp.AppendLine("---");
+                    foreach (var kv in _metadata)
+                    {
+                        var v = kv.Value?.Replace("\"", "\\\"") ?? string.Empty;
+                        comp.AppendLine($"{kv.Key}: \"{v}\"");
+                    }
+                    comp.AppendLine("---");
+                    comp.AppendLine();
+                }
+                comp.AppendLine("# Schemas");
+                comp.AppendLine();
+                
+                foreach (var (name, schemaValue) in schemasToDocument)
+                {
+                    comp.AppendLine($"## {name}");
+                    comp.AppendLine();
+                    try
+                    {
+                        var expanded = Helpers.SummarizeSchema(schemaValue, _root, _expansionCache);
+                        if (!string.IsNullOrWhiteSpace(expanded))
+                        {
+                            comp.AppendLine("```");
+                            comp.AppendLine(expanded.TrimEnd());
+                            comp.AppendLine("```");
+                        }
+                        else
+                        {
+                            comp.AppendLine("```json");
+                            comp.AppendLine(JsonSerializer.Serialize(schemaValue, new JsonSerializerOptions { WriteIndented = true }));
+                            comp.AppendLine("```");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        comp.AppendLine($"Failed to expand {name}: {ex.Message}");
+                    }
+                    comp.AppendLine();
+                }
+
+                yield return ("Schemas.md", comp.ToString());
+            }
         }
     }
 }

@@ -13,9 +13,9 @@ public enum GeneratedFileType
     Operation,
     
     /// <summary>
-    /// Represents the components/schemas section.
+    /// Represents the schemas section.
     /// </summary>
-    Component,
+    Schema,
     
     /// <summary>
     /// Represents the index file.

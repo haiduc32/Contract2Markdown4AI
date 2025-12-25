@@ -200,7 +200,7 @@ public class OperationGenerator
                             sb.AppendLine($"- Content: {media.Name}");
                             if (media.Value.ValueKind == JsonValueKind.Object && media.Value.TryGetProperty("schema", out var schema))
                             {
-                                CollectComponentRefs(schema, modelsToInclude);
+                                CollectSchemaRefs(schema, modelsToInclude);
 
                                 if (schema.ValueKind == JsonValueKind.Object && schema.TryGetProperty("$ref", out var srefTop) && srefTop.ValueKind == JsonValueKind.String)
                                 {
@@ -282,7 +282,7 @@ public class OperationGenerator
                 // Expand models
                 if (modelsToInclude != null && modelsToInclude.Count > 0)
                 {
-                    CollectTransitiveComponentRefs(modelsToInclude);
+                    CollectTransitiveSchemaRefs(modelsToInclude);
                 }
 
                 // Append models
@@ -327,7 +327,7 @@ public class OperationGenerator
 
     private void ProcessResponseSchema(JsonElement schema, HashSet<string> modelsToInclude, StringBuilder sb)
     {
-        CollectComponentRefs(schema, modelsToInclude);
+        CollectSchemaRefs(schema, modelsToInclude);
         
         if (schema.ValueKind == JsonValueKind.Object && schema.TryGetProperty("$ref", out var sref) && sref.ValueKind == JsonValueKind.String)
         {
@@ -358,7 +358,7 @@ public class OperationGenerator
         }
     }
 
-    private void CollectComponentRefs(JsonElement node, HashSet<string> set)
+    private void CollectSchemaRefs(JsonElement node, HashSet<string> set)
     {
         if (node.ValueKind == JsonValueKind.Object)
         {
@@ -375,17 +375,17 @@ public class OperationGenerator
             }
             foreach (var prop in node.EnumerateObject())
             {
-                CollectComponentRefs(prop.Value, set);
+                CollectSchemaRefs(prop.Value, set);
             }
         }
         else if (node.ValueKind == JsonValueKind.Array)
         {
             foreach (var el in node.EnumerateArray())
-                CollectComponentRefs(el, set);
+                CollectSchemaRefs(el, set);
         }
     }
 
-    private void CollectTransitiveComponentRefs(HashSet<string> set)
+    private void CollectTransitiveSchemaRefs(HashSet<string> set)
     {
         if (set == null || set.Count == 0) return;
         var seen = new HashSet<string>(set, StringComparer.OrdinalIgnoreCase);
@@ -405,7 +405,7 @@ public class OperationGenerator
                 catch { continue; }
 
                 var beforeCount = set.Count;
-                CollectComponentRefs(resolved, set);
+                CollectSchemaRefs(resolved, set);
                 foreach (var added in set)
                 {
                     if (!seen.Contains(added))

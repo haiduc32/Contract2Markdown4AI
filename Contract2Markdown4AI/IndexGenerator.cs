@@ -28,12 +28,12 @@ public class IndexGenerator
         _filenameProgress = filenameProgress;
     }
 
-    public async Task<(int WrittenCount, List<string> WrittenPaths)> GenerateIndexAsync(List<(string File, string Method, string Path, string OperationId, string FriendlyName)> indexEntries)
+    public async Task<(int WrittenCount, List<string> WrittenPaths)> GenerateIndexAsync(List<(string File, string Method, string Path, string OperationId, string FriendlyName)> indexEntries, List<(string Name, string File)>? schemaEntries = null)
     {
         int written = 0;
         var writtenPaths = new List<string>();
 
-        var (fileName, content) = GetIndex(indexEntries);
+        var (fileName, content) = GetIndex(indexEntries, schemaEntries);
         var indexPath = Path.Combine(_outputFolder, fileName);
         await File.WriteAllTextAsync(indexPath, content).ConfigureAwait(false);
         written++;
@@ -44,7 +44,7 @@ public class IndexGenerator
         return (written, writtenPaths);
     }
 
-    public (string FileName, string Content) GetIndex(List<(string File, string Method, string Path, string OperationId, string FriendlyName)> indexEntries)
+    public (string FileName, string Content) GetIndex(List<(string File, string Method, string Path, string OperationId, string FriendlyName)> indexEntries, List<(string Name, string File)>? schemaEntries = null)
     {
         var idx = new StringBuilder();
 
@@ -61,7 +61,9 @@ public class IndexGenerator
             idx.AppendLine();
         }
 
-        idx.AppendLine($"# {_apiTitle} - Operations Index");
+        idx.AppendLine($"# {_apiTitle} - Index");
+        idx.AppendLine();
+        idx.AppendLine("## Operations");
         idx.AppendLine();
         idx.AppendLine("| Operation | OperationId | Method | Path |");
         idx.AppendLine("|---|---|---|---|");
@@ -73,6 +75,26 @@ public class IndexGenerator
             // make path monospace and escape vertical bars
             var pathEscaped = e.Path.Replace("|", "\\|");
             idx.AppendLine($"| [{opText}](./{fileLink}) | {opIdText} | {e.Method} | `{pathEscaped}` |");
+        }
+
+        if (schemaEntries != null && schemaEntries.Count > 0)
+        {
+            idx.AppendLine();
+            if (schemaEntries.Count == 1 && schemaEntries[0].File == "Schemas.md")
+            {
+                idx.AppendLine("## Schemas");
+                idx.AppendLine();
+                idx.AppendLine($"- [{schemaEntries[0].Name}](./{schemaEntries[0].File})");
+            }
+            else
+            {
+                idx.AppendLine("## Schemas");
+                idx.AppendLine();
+                foreach (var s in schemaEntries)
+                {
+                    idx.AppendLine($"- [{s.Name}](./{s.File.Replace("\\", "/")})");
+                }
+            }
         }
 
         return ("Index.md", idx.ToString());

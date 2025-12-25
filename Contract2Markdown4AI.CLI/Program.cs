@@ -16,16 +16,19 @@ class Program
         var inputArg = new Argument<string>("input") { Description = "Path to the OpenAPI JSON/YAML file" };
         var outputOpt = new Option<string>("--output", "-o" ) { Description = "Output folder for generated markdown", Arity = ArgumentArity.ZeroOrOne, DefaultValueFactory = (ar) => outputDefault };
         var metaOpt = new Option<string[]>("--meta", "-m" ) { Description = "Metadata key:value entries to pass to generator", Arity = ArgumentArity.ZeroOrMore };
+        var schemasOpt = new Option<bool>("--schemas", "-s") { Description = "Generate schemas as independent files in a dedicated folder", Arity = ArgumentArity.ZeroOrOne };
 
         root.Add(inputArg);
         root.Add(outputOpt);
         root.Add(metaOpt);
+        root.Add(schemasOpt);
 
         root.SetAction(async parseResult =>
         {
             var input = parseResult.GetRequiredValue(inputArg);
             var output = parseResult.GetValue(outputOpt) ?? outputDefault;
             var metas = parseResult.GetValue(metaOpt) ?? Array.Empty<string>();
+            var schemas = parseResult.GetValue(schemasOpt);
 
             var spinner = AnsiConsole.Status();
 
@@ -104,7 +107,7 @@ class Program
                         var task = ctx.AddTask("Generating files", maxValue: Math.Max(1, totalOps));
                         var progAdapter = new Progress<int>(v => task.Value = v);
                         var fileProg = new Progress<string?>(name => task.Description = string.IsNullOrEmpty(name) ? "Generating files" : $"{name}");
-                        written = await OpenApiToMarkdown.GenerateFilesAsync(document, outputFolder, metadata, progAdapter, fileProg).ConfigureAwait(false);
+                        written = await OpenApiToMarkdown.GenerateFilesAsync(document, outputFolder, metadata, progAdapter, fileProg, schemas).ConfigureAwait(false);
                         task.Value = task.MaxValue;
                     }).ConfigureAwait(false);
             }
