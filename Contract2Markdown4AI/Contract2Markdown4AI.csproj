@@ -4,11 +4,24 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Version>1.0.0</Version>
+    <Authors>Radu Pascal</Authors>
+    <Description>A library to convert OpenAPI/Swagger contracts to Markdown files optimized for AI consumption.</Description>
+    <PackageTags>OpenAPI;Swagger;Markdown;AI;Documentation</PackageTags>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- NSwag used to load OpenAPI/Swagger documents -->
-    <PackageReference Include="NSwag.Core" Version="14.6.2" />
+    <PackageReference Include="NSwag.Core" Version="[14.0.0, )" />
+    <PackageReference Include="NSwag.Core.Yaml" Version="[14.0.0, )" />
   </ItemGroup>
 
 </Project>
