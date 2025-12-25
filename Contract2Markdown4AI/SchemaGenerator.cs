@@ -55,7 +55,7 @@ public class SchemaGenerator
         var schemasToDocument = new List<(string name, JsonElement schema)>();
         
         // Check for OpenAPI 3.0 schemas
-        if (_root.TryGetProperty("schemas", out var schemas) && schemas.ValueKind == JsonValueKind.Object)
+        if (_root.TryGetProperty("components", out var components) && components.TryGetProperty("schemas", out var schemas) && schemas.ValueKind == JsonValueKind.Object)
         {
             foreach (var schema in schemas.EnumerateObject())
             {

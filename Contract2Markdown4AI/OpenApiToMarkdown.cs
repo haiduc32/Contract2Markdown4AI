@@ -24,8 +24,9 @@ public static class OpenApiToMarkdown
     /// <param name="progress">Optional progress reporter for the number of files written.</param>
     /// <param name="filenameProgress">Optional progress reporter for the name of the file currently being written.</param>
     /// <param name="generateIndependentSchemas">Whether to generate schemas as independent files.</param>
+    /// <param name="skipSchemas">Whether to skip schema generation entirely.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the number of files written.</returns>
-    public static async Task<int> GenerateFilesAsync(OpenApiDocument document, string outputFolder, IDictionary<string, string>? metadata = null, IProgress<int>? progress = null, IProgress<string?>? filenameProgress = null, bool generateIndependentSchemas = false)
+    public static async Task<int> GenerateFilesAsync(OpenApiDocument document, string outputFolder, IDictionary<string, string>? metadata = null, IProgress<int>? progress = null, IProgress<string?>? filenameProgress = null, bool generateIndependentSchemas = false, bool skipSchemas = false)
     {
         if (document == null) throw new ArgumentNullException(nameof(document));
         if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentNullException(nameof(outputFolder));
@@ -35,7 +36,7 @@ public static class OpenApiToMarkdown
         int written = 0;
         var writtenPaths = new List<string>();
 
-        await foreach (var item in GenerateAsync(document, metadata, progress, filenameProgress, generateIndependentSchemas).ConfigureAwait(false))
+        await foreach (var item in GenerateAsync(document, metadata, progress, filenameProgress, generateIndependentSchemas, skipSchemas).ConfigureAwait(false))
         {
             var outPath = Path.Combine(outputFolder, item.FileName);
             var dir = Path.GetDirectoryName(outPath);
@@ -66,8 +67,9 @@ public static class OpenApiToMarkdown
     /// <param name="progress">Optional progress reporter for the number of files generated.</param>
     /// <param name="filenameProgress">Optional progress reporter for the name of the file currently being generated.</param>
     /// <param name="generateIndependentSchemas">Whether to generate schemas as independent files.</param>
+    /// <param name="skipSchemas">Whether to skip schema generation entirely.</param>
     /// <returns>An asynchronous stream of generated files.</returns>
-    public static async IAsyncEnumerable<GeneratedFile> GenerateAsync(OpenApiDocument document, IDictionary<string, string>? metadata = null, IProgress<int>? progress = null, IProgress<string?>? filenameProgress = null, bool generateIndependentSchemas = false)
+    public static async IAsyncEnumerable<GeneratedFile> GenerateAsync(OpenApiDocument document, IDictionary<string, string>? metadata = null, IProgress<int>? progress = null, IProgress<string?>? filenameProgress = null, bool generateIndependentSchemas = false, bool skipSchemas = false)
     {
         if (document == null) throw new ArgumentNullException(nameof(document));
 
@@ -118,28 +120,31 @@ public static class OpenApiToMarkdown
 
         // 2. Generate Schemas
         bool schemasGenerated = false;
-        var schemaGen = new SchemaGenerator(root, string.Empty, metadata, expansionCache, progress, filenameProgress);
-        await foreach (var schema in schemaGen.GetSchemasAsync(generateIndependentSchemas).ConfigureAwait(false))
+        if (!skipSchemas)
         {
-            schemasGenerated = true;
-            if (generateIndependentSchemas)
+            var schemaGen = new SchemaGenerator(root, string.Empty, metadata, expansionCache, progress, filenameProgress);
+            await foreach (var schema in schemaGen.GetSchemasAsync(generateIndependentSchemas).ConfigureAwait(false))
             {
-                // Extract schema name from filename (schemas/Name.md)
-                var name = Path.GetFileNameWithoutExtension(schema.FileName);
-                schemaEntries.Add((name, schema.FileName));
-            }
+                schemasGenerated = true;
+                if (generateIndependentSchemas)
+                {
+                    // Extract schema name from filename (schemas/Name.md)
+                    var name = Path.GetFileNameWithoutExtension(schema.FileName);
+                    schemaEntries.Add((name, schema.FileName));
+                }
 
-            yield return new GeneratedFile
-            {
-                FileName = schema.FileName,
-                Content = schema.Content,
-                FileType = GeneratedFileType.Schema
-            };
+                yield return new GeneratedFile
+                {
+                    FileName = schema.FileName,
+                    Content = schema.Content,
+                    FileType = GeneratedFileType.Schema
+                };
+            }
         }
 
         // 3. Generate Index
         var idxGen = new IndexGenerator(string.Empty, apiTitle, metadata, progress, filenameProgress);
-        var idx = idxGen.GetIndex(indexEntries, generateIndependentSchemas ? schemaEntries : (schemasGenerated ? new List<(string Name, string File)> { ("All Schemas", "schemas.md") } : null));
+        var idx = idxGen.GetIndex(indexEntries, generateIndependentSchemas ? schemaEntries : (schemasGenerated ? new List<(string Name, string File)> { ("All Schemas", "Schemas.md") } : null));
         yield return new GeneratedFile
         {
             FileName = idx.FileName,
