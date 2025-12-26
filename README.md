@@ -15,6 +15,9 @@ A .NET library and CLI tool to convert OpenAPI/Swagger contracts into Markdown f
 dotnet add package Contract2Markdown4AI
 ```
 
+> [!NOTE]
+> The library uses **NSwag** to handle OpenAPI documents. When you install `Contract2Markdown4AI`, the necessary NSwag packages (`NSwag.Core` and `NSwag.Core.Yaml`) are included automatically as dependencies.
+
 ## Usage
 
 ### Library
@@ -29,7 +32,7 @@ Use `GenerateFilesAsync` to process an OpenAPI document and save the resulting M
 using Contract2Markdown4AI;
 using NSwag;
 
-// Load document
+// Load JSON document
 var document = await OpenApiDocument.FromFileAsync("petstore.json");
 
 var outputFolder = "./output";
@@ -53,7 +56,21 @@ int totalFiles = await OpenApiToMarkdown.GenerateFilesAsync(
 );
 ```
 
-#### 2. Generate In-Memory (Streaming)
+#### 2. Loading YAML Contracts
+
+If your contract is in YAML format, use `OpenApiYamlDocument` to load it.
+
+```csharp
+using Contract2Markdown4AI;
+using NSwag;
+
+var yaml = await File.ReadAllTextAsync("petstore.yaml");
+var document = await OpenApiYamlDocument.FromYamlAsync(yaml);
+
+await OpenApiToMarkdown.GenerateFilesAsync(document, "./output");
+```
+
+#### 3. Generate In-Memory (Streaming)
 
 Use `GenerateAsync` to get an `IAsyncEnumerable<GeneratedFile>` if you want to process the content in-memory without writing to disk immediately.
 
