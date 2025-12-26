@@ -40,7 +40,7 @@ public class SchemaGenerator
         await foreach (var schema in GetSchemasAsync().ConfigureAwait(false))
         {
             var schemaPath = Path.Combine(_outputFolder, schema.FileName);
-            await File.WriteAllTextAsync(schemaPath, schema.Content).ConfigureAwait(false);
+            await Helpers.WriteAllTextAsync(schemaPath, schema.Content).ConfigureAwait(false);
             written++;
             writtenPaths.Add(schemaPath);
             try { _progress?.Report(written); } catch { }

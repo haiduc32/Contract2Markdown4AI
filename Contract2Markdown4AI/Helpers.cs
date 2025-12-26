@@ -44,7 +44,7 @@ class Helpers
         var lines = block.Split(new[] { '\n' }, StringSplitOptions.None).Select(l => l.Replace("\r", "")).ToList();
         // remove empty leading/trailing lines
         while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[0])) lines.RemoveAt(0);
-        while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[^1])) lines.RemoveAt(lines.Count - 1);
+        while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[lines.Count - 1])) lines.RemoveAt(lines.Count - 1);
         int minLead = int.MaxValue;
         foreach (var l in lines)
         {
@@ -368,5 +368,15 @@ class Helpers
                 sb.AppendLine(ind + "  " + prop.Name + ": " + (prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() : prop.Value.ToString()));
         }
         return sb.ToString();
+    }
+
+    public static Task WriteAllTextAsync(string path, string contents)
+    {
+#if NETSTANDARD2_0
+        File.WriteAllText(path, contents);
+        return Task.CompletedTask;
+#else
+        return File.WriteAllTextAsync(path, contents);
+#endif
     }
 }

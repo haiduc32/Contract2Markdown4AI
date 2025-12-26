@@ -144,7 +144,7 @@ class Program
             {
                 var key = pair.Substring(0, idx).Trim();
                 var value = pair.Substring(idx + 1).Trim();
-                if (value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
+                if (value.Length >= 2 && ((value[0] == '"' && value[value.Length - 1] == '"') || (value[0] == '\'' && value[value.Length - 1] == '\'')))
                     value = value.Substring(1, value.Length - 2);
                 if (!string.IsNullOrEmpty(key))
                     metadata[key] = value;

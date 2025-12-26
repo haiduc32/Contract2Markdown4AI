@@ -11,6 +11,9 @@
     <Description>CLI tool to convert OpenAPI/Swagger contracts to Markdown files optimized for AI consumption.</Description>
     <PackageTags>OpenAPI;Swagger;Markdown;AI;Documentation;CLI</PackageTags>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <RepositoryUrl>https://github.com/haiduc32/Contract2Markdown4AI</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/haiduc32/Contract2Markdown4AI</PackageProjectUrl>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>c2m4ai</ToolCommandName>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>

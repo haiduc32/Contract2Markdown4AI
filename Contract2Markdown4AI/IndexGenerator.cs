@@ -35,7 +35,7 @@ public class IndexGenerator
 
         var (fileName, content) = GetIndex(indexEntries, schemaEntries);
         var indexPath = Path.Combine(_outputFolder, fileName);
-        await File.WriteAllTextAsync(indexPath, content).ConfigureAwait(false);
+        await Helpers.WriteAllTextAsync(indexPath, content).ConfigureAwait(false);
         written++;
         writtenPaths.Add(indexPath);
         try { _progress?.Report(written); } catch { }

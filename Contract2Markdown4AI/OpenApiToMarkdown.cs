@@ -41,7 +41,7 @@ public static class OpenApiToMarkdown
             var outPath = Path.Combine(outputFolder, item.FileName);
             var dir = Path.GetDirectoryName(outPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            await File.WriteAllTextAsync(outPath, item.Content).ConfigureAwait(false);
+            await Helpers.WriteAllTextAsync(outPath, item.Content).ConfigureAwait(false);
             written++;
             writtenPaths.Add(outPath);
             try { progress?.Report(written); } catch { }

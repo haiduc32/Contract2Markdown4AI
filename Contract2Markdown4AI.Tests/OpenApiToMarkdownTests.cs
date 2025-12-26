@@ -9,11 +9,20 @@ namespace Contract2Markdown4AI.Tests;
 
 public class OpenApiToMarkdownTests
 {
+    private static Task<string> ReadAllTextAsync(string path)
+    {
+#if NETFRAMEWORK
+        return Task.FromResult(File.ReadAllText(path));
+#else
+        return File.ReadAllTextAsync(path);
+#endif
+    }
+
     [Fact]
     public async Task GenerateFilesAsync_WithValidDocument_GeneratesFiles()
     {
         // Arrange
-        string json = await File.ReadAllTextAsync("petstore.json");
+        string json = await ReadAllTextAsync("petstore.json");
         var document = await OpenApiDocument.FromJsonAsync(json);
         string outputFolder = Path.Combine(Path.GetTempPath(), "Contract2Markdown4AI_Tests_" + Guid.NewGuid());
 
@@ -35,7 +44,7 @@ public class OpenApiToMarkdownTests
 
             // Verify content of getPetById.md
             var getPetByIdFile = files.First(f => Path.GetFileName(f).Contains("getPetById.md", StringComparison.OrdinalIgnoreCase));
-            string content = await File.ReadAllTextAsync(getPetByIdFile);
+            string content = await ReadAllTextAsync(getPetByIdFile);
             
             Assert.Contains("Find pet by ID", content);
             Assert.Contains("Returns a single pet", content);
@@ -57,7 +66,7 @@ public class OpenApiToMarkdownTests
     public async Task GenerateFilesAsync_WithValidV3Document_GeneratesFiles()
     {
         // Arrange
-        string json = await File.ReadAllTextAsync("petstore-v3.json");
+        string json = await ReadAllTextAsync("petstore-v3.json");
         var document = await OpenApiDocument.FromJsonAsync(json);
         string outputFolder = Path.Combine(Path.GetTempPath(), "Contract2Markdown4AI_Tests_V3_" + Guid.NewGuid());
 
@@ -79,7 +88,7 @@ public class OpenApiToMarkdownTests
 
             // Verify content of listPets.md
             var listPetsFile = files.First(f => Path.GetFileName(f).Contains("listPets.md", StringComparison.OrdinalIgnoreCase));
-            string content = await File.ReadAllTextAsync(listPetsFile);
+            string content = await ReadAllTextAsync(listPetsFile);
 
             Assert.Contains("List all pets", content);
             Assert.Contains("GET /pets", content);
@@ -113,7 +122,7 @@ public class OpenApiToMarkdownTests
     public async Task GenerateAsync_ReturnsContent()
     {
         // Arrange
-        string json = await File.ReadAllTextAsync("petstore.json");
+        string json = await ReadAllTextAsync("petstore.json");
         var document = await OpenApiDocument.FromJsonAsync(json);
 
         // Act

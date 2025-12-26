@@ -45,7 +45,7 @@ public class OperationGenerator
         await foreach (var op in GetOperationsAsync(paths).ConfigureAwait(false))
         {
             var outPath = Path.Combine(_outputFolder, op.FileName);
-            await File.WriteAllTextAsync(outPath, op.Content).ConfigureAwait(false);
+            await Helpers.WriteAllTextAsync(outPath, op.Content).ConfigureAwait(false);
             written++;
             writtenPaths.Add(outPath);
             try { _progress?.Report(written); } catch { }
@@ -209,7 +209,7 @@ public class OperationGenerator
                                         refTop.StartsWith("#/definitions/", StringComparison.OrdinalIgnoreCase))
                                     {
                                         var parts = refTop.Split('/');
-                                        var modelName = parts.Length > 0 ? parts[^1] : refTop;
+                                        var modelName = parts.Length > 0 ? parts[parts.Length - 1] : refTop;
                                         modelsToInclude.Add(refTop);
                                         sb.AppendLine();
                                         sb.AppendLine($"- Schema: {modelName} (see model section below)");
@@ -294,7 +294,7 @@ public class OperationGenerator
                         {
                             var resolved = Helpers.ResolveReference(_root, mref);
                             var parts = mref.Split('/');
-                            var modelName = parts.Length > 0 ? parts[^1] : mref;
+                            var modelName = parts.Length > 0 ? parts[parts.Length - 1] : mref;
                             sb.AppendLine();
                             sb.AppendLine($"## Model: {modelName}");
                             sb.AppendLine($"<a id=\"{modelName}\"></a>");
@@ -336,7 +336,7 @@ public class OperationGenerator
                 refStr.StartsWith("#/definitions/", StringComparison.OrdinalIgnoreCase))
             {
                 var parts = refStr.Split('/');
-                var modelName = parts.Length > 0 ? parts[^1] : refStr;
+                var modelName = parts.Length > 0 ? parts[parts.Length - 1] : refStr;
                 modelsToInclude.Add(refStr);
                 sb.AppendLine($"- Schema: {modelName} (see model section below)");
                 return;
